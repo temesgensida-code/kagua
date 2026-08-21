@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { Sun, Moon } from '@lucide/svelte';
-  import { themeState } from '$lib/services/theme.svelte';
-  import { soundState } from '$lib/services/sound.svelte';
+  import { Sun, Moon } from "@lucide/svelte";
+  import { themeState } from "$lib/services/theme.svelte";
+  import { soundState } from "$lib/services/sound.svelte";
 </script>
 
 <div class="theme-card-wrapper">
@@ -12,7 +12,7 @@
       themeState.toggle();
       soundState.playClick();
     }}
-    title={themeState.isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+    title={themeState.isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
     aria-label="Toggle theme"
   >
     <!-- Sliding active indicator rectangle -->
@@ -41,13 +41,13 @@
     display: flex;
     align-items: center;
     background: rgba(13, 23, 36, 0.95);
-    border: 1px solid #132E35;
+    border: 1px solid #132e35;
     border-radius: 6px;
     padding: 3px;
     gap: 3px;
     cursor: pointer;
     transition: all 0.25s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .theme-toggle-card {
@@ -69,10 +69,13 @@
     left: 3px;
     width: 28px;
     height: 26px;
-    background: #132E35;
+    background: #132e35;
     border: 1px solid #1e434c;
     border-radius: 4px;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease;
+    transition:
+      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      background 0.25s ease,
+      border-color 0.25s ease;
     pointer-events: none;
   }
 

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Volume2, VolumeX } from '@lucide/svelte';
-  import { soundState } from '$lib/services/sound.svelte';
+  import { Volume2, VolumeX } from "@lucide/svelte";
+  import { soundState } from "$lib/services/sound.svelte";
 </script>
 
 <div class="sound-card-wrapper">
@@ -11,7 +11,7 @@
       soundState.toggleMute();
       if (!soundState.isMuted) soundState.playClick();
     }}
-    title={soundState.isMuted ? 'Unmute sound effects' : 'Mute sound effects'}
+    title={soundState.isMuted ? "Unmute sound effects" : "Mute sound effects"}
     aria-label="Toggle sound"
   >
     <!-- Sliding active indicator rectangle -->
@@ -40,13 +40,13 @@
     display: flex;
     align-items: center;
     background: rgba(13, 23, 36, 0.95);
-    border: 1px solid #132E35;
+    border: 1px solid #132e35;
     border-radius: 6px;
     padding: 3px;
     gap: 3px;
     cursor: pointer;
     transition: all 0.25s ease;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   .sound-toggle-card:hover {
@@ -59,16 +59,19 @@
     left: 3px;
     width: 28px;
     height: 26px;
-    background: #132E35;
+    background: #132e35;
     border: 1px solid #1e434c;
     border-radius: 4px;
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, border-color 0.25s ease;
+    transition:
+      transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+      background 0.25s ease,
+      border-color 0.25s ease;
     pointer-events: none;
   }
 
   .sliding-indicator.muted {
     transform: translateX(31px);
-    background: #132E35;
+    background: #132e35;
     border-color: #1e434c;
   }
 
