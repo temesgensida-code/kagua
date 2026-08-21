@@ -430,10 +430,10 @@
   /* Split Screen Layout */
   .split-screen-grid {
     display: grid;
-    grid-template-columns: 1fr 400px;
+    grid-template-columns: 1fr 420px;
     gap: 1.25rem;
-    height: calc(100vh - 300px);
-    min-height: 500px;
+    height: calc(100vh - 220px);
+    min-height: 650px;
   }
 
   @media (max-width: 1024px) {
@@ -643,7 +643,7 @@
     flex-direction: column;
     gap: 1rem;
     flex: 1;
-    min-height: 550px;
+    min-height: 500px;
     overflow: hidden;
   }
 

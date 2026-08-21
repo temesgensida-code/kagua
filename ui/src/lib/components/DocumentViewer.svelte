@@ -317,7 +317,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    min-height: 580px;
+    min-height: 350px;
     background: #080f17;
     border: 1px solid rgba(0, 240, 255, 0.18);
     border-radius: 6px;
