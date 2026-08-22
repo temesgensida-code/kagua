@@ -12,6 +12,14 @@ export interface MappedViolation {
   statutory_text?: string;
 }
 
+export interface AIFactReasoning {
+  fact_key: string;
+  value: any;
+  confidence: number;
+  explanation: string;
+  source_quote?: string;
+}
+
 export interface AnalysisReport {
   filename: string;
   text_length: number;
@@ -30,6 +38,10 @@ export interface AnalysisReport {
   proclamation_metadata?: any;
   matched_articles?: any;
   raw_text?: string;
+  ai_augmented?: boolean;
+  ai_model_used?: string;
+  ai_facts_count?: number;
+  ai_reasoning?: AIFactReasoning[];
 }
 
 export interface ProgressEvent {
@@ -39,17 +51,34 @@ export interface ProgressEvent {
   timestamp_ms: number;
 }
 
+export interface AIConfigParams {
+  enabled: boolean;
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+}
+
 const API_BASE = 'http://127.0.0.1:8080';
 const WS_BASE = 'ws://127.0.0.1:8080/ws';
 
 export async function analyzeDocument(
   fileData: Blob | File,
   filename: string,
-  domain: string = 'auto'
+  domain: string = 'auto',
+  aiConfig?: AIConfigParams
 ): Promise<AnalysisReport> {
   const formData = new FormData();
   formData.append('file', fileData, filename);
   formData.append('domain', domain);
+
+  if (aiConfig?.enabled) {
+    formData.append('ai_enabled', 'true');
+    if (aiConfig.provider) formData.append('ai_provider', aiConfig.provider);
+    if (aiConfig.model) formData.append('ai_model', aiConfig.model);
+    if (aiConfig.apiKey) formData.append('ai_api_key', aiConfig.apiKey);
+  } else {
+    formData.append('ai_enabled', 'false');
+  }
 
   const response = await fetch(`${API_BASE}/analyze`, {
     method: 'POST',

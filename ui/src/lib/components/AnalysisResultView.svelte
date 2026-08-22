@@ -14,6 +14,7 @@
     FileText,
     MapPin,
     Search,
+    Sparkles,
   } from "@lucide/svelte";
 
   interface Props {
@@ -126,7 +127,12 @@
           {#if report?.suggested_domain}
             Auto-Selected Domain: <strong class="badge-accent"
               >{report.suggested_domain.toUpperCase()}</strong
-            >
+            > &bull;
+          {/if}
+          {#if report?.ai_augmented}
+            Mode: <strong class="badge-ai"><Sparkles size={11} /> AI ({report.ai_model_used || 'LLM'})</strong>
+          {:else}
+            Mode: <strong class="badge-inmemory">Prolog In-Memory</strong>
           {/if}
         </span>
       </div>
@@ -337,11 +343,141 @@
           </div>
         </div>
       {/if}
+
+      <!-- AI Reasoning Panel -->
+      {#if report?.ai_reasoning && report.ai_reasoning.length > 0}
+        <div class="ai-reasoning-card">
+          <div class="ai-reasoning-header">
+            <Sparkles size={14} class="ai-card-icon" />
+            <h4 class="ai-card-title">
+              AI RAG FACT REASONING ({report.ai_reasoning.length} FACTS &bull; {report.ai_model_used || 'LLM'})
+            </h4>
+          </div>
+          <div class="ai-reasoning-list">
+            {#each report.ai_reasoning as item}
+              <div class="ai-item">
+                <div class="ai-item-top">
+                  <span class="ai-fact-key"
+                    >{item.fact_key}:
+                    <strong class="ai-fact-val">{JSON.stringify(item.value)}</strong>
+                  </span>
+                  <span class="ai-conf-badge">
+                    {(item.confidence * 100).toFixed(0)}% CONF
+                  </span>
+                </div>
+                <p class="ai-explanation">{item.explanation}</p>
+                {#if item.source_quote}
+                  <div class="ai-source-quote">"{item.source_quote}"</div>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </div>
   </div>
 </div>
 
 <style>
+  .badge-ai {
+    color: #00ff88;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .badge-inmemory {
+    color: var(--cyan-primary);
+  }
+
+  .ai-reasoning-card {
+    background: #0d1724;
+    border: 1px solid rgba(0, 255, 136, 0.25);
+    border-radius: 6px;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .ai-reasoning-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ai-reasoning-header :global(.ai-card-icon) {
+    color: #00ff88;
+  }
+
+  .ai-card-title {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 1.5px;
+    color: #00ff88;
+    font-weight: 700;
+  }
+
+  .ai-reasoning-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .ai-item {
+    background: rgba(4, 12, 22, 0.9);
+    border: 1px solid rgba(0, 255, 136, 0.15);
+    border-radius: 4px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .ai-item-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .ai-fact-key {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--cyan-muted);
+  }
+
+  .ai-fact-val {
+    color: #ffffff;
+  }
+
+  .ai-conf-badge {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    font-weight: 800;
+    color: #00ff88;
+    background: rgba(0, 255, 136, 0.12);
+    border: 1px solid rgba(0, 255, 136, 0.3);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  .ai-explanation {
+    font-family: var(--font-body);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.35;
+  }
+
+  .ai-source-quote {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: #8fa0b5;
+    background: rgba(0, 0, 0, 0.3);
+    border-left: 2px solid var(--cyan-primary);
+    padding: 4px 6px;
+    border-radius: 2px;
+  }
+
   .result-container {
     width: 100%;
     display: flex;

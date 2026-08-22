@@ -4,6 +4,7 @@
   import AnalysisResultView from '$lib/components/AnalysisResultView.svelte';
   import { INITIAL_FRAMEWORKS, type Framework } from '$lib/data/sampleDocs';
   import { analyzeDocument, subscribeProgress, type AnalysisReport, type ProgressEvent } from '$lib/services/api';
+  import { aiSettings } from '$lib/services/aiSettings.svelte';
 
   let frameworks = $state<Framework[]>(INITIAL_FRAMEWORKS);
   let isScanning = $state(false);
@@ -44,8 +45,13 @@
     });
 
     try {
-      // Post document stream to Rust Axum /analyze endpoint
-      const resultReport = await analyzeDocument(fileData, filename, 'auto');
+      // Post document stream to Rust Axum /analyze endpoint with AI settings
+      const resultReport = await analyzeDocument(fileData, filename, 'auto', {
+        enabled: aiSettings.enabled,
+        provider: aiSettings.provider,
+        model: aiSettings.selectedModelId,
+        apiKey: aiSettings.apiKey
+      });
       report = resultReport;
     } catch (err: any) {
       console.error('Backend analysis error:', err);

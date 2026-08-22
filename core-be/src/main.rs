@@ -16,7 +16,7 @@ use axum::{
 use tower_http::cors::{Any, CorsLayer};
 use tracing::info;
 
-use crate::models::AnalysisReport;
+use crate::models::{AIParams, AnalysisReport};
 use crate::pdf::generate_audit_pdf;
 use crate::service::process_analysis_pipeline;
 use crate::ws::{ws_handler, WsState};
@@ -76,6 +76,7 @@ async fn analyze_handler(
     let mut content_type = None;
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut domain_spec = serde_json::json!("all");
+    let mut ai_params = AIParams::default();
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or_default().to_string();
@@ -99,6 +100,24 @@ async fn analyze_handler(
             } else {
                 domain_spec = serde_json::json!(text);
             }
+        } else if name == "ai_enabled" {
+            let text = field.text().await.unwrap_or_default();
+            ai_params.enabled = text == "true" || text == "1";
+        } else if name == "ai_provider" {
+            let text = field.text().await.unwrap_or_default();
+            if !text.is_empty() {
+                ai_params.provider = Some(text);
+            }
+        } else if name == "ai_model" {
+            let text = field.text().await.unwrap_or_default();
+            if !text.is_empty() {
+                ai_params.model = Some(text);
+            }
+        } else if name == "ai_api_key" {
+            let text = field.text().await.unwrap_or_default();
+            if !text.is_empty() {
+                ai_params.api_key = Some(text);
+            }
         }
     }
 
@@ -110,7 +129,7 @@ async fn analyze_handler(
         return Err((StatusCode::BAD_REQUEST, "Uploaded file stream is empty".to_string()));
     }
 
-    let report = process_analysis_pipeline(filename, content_type, bytes, domain_spec, &ws_state).await?;
+    let report = process_analysis_pipeline(filename, content_type, bytes, domain_spec, ai_params, &ws_state).await?;
 
     Ok(Json(report))
 }

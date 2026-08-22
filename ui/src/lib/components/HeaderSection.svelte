@@ -2,6 +2,8 @@
   import type { Framework } from '$lib/data/sampleDocs';
   import SoundToggle from './SoundToggle.svelte';
   import ThemeToggle from './ThemeToggle.svelte';
+  import AIToggle from './AIToggle.svelte';
+  import SettingsModal from './SettingsModal.svelte';
   import { soundState } from '$lib/services/sound.svelte';
 
   interface Props {
@@ -12,6 +14,7 @@
   let { frameworks, onToggleFramework }: Props = $props();
 
   let activeCount = $derived(frameworks.filter(f => f.active).length);
+  let isSettingsOpen = $state(false);
 </script>
 
 <header class="header-container">
@@ -24,10 +27,16 @@
 
     <!-- Top Right Toggle Controls -->
     <div class="toggle-controls">
+      <AIToggle onOpenSettings={() => isSettingsOpen = true} />
       <ThemeToggle />
       <SoundToggle />
     </div>
   </div>
+
+  <SettingsModal
+    isOpen={isSettingsOpen}
+    onClose={() => isSettingsOpen = false}
+  />
 
   <!-- Main Headline -->
   <h1 class="main-title">

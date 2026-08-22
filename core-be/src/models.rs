@@ -91,6 +91,36 @@ pub struct MappedViolation {
     pub statutory_text: Option<String>,
 }
 
+/// AI configuration passed from frontend
+#[derive(Debug, Clone, Default)]
+pub struct AIParams {
+    pub enabled: bool,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub api_key: Option<String>,
+}
+
+/// AI reasoning detail per extracted fact
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AIFactReasoning {
+    pub fact_key: String,
+    pub value: serde_json::Value,
+    pub confidence: f64,
+    pub explanation: String,
+    pub source_quote: Option<String>,
+}
+
+/// Response returned from FastAPI `/ai-extract`
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AIExtractionResponse {
+    pub status: String,
+    pub provider: String,
+    pub model: String,
+    pub ai_facts: serde_json::Map<String, serde_json::Value>,
+    pub ai_reasoning: Vec<AIFactReasoning>,
+    pub facts_extracted_count: usize,
+}
+
 /// Final comprehensive analysis report returned by `POST /analyze`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisReport {
@@ -111,6 +141,10 @@ pub struct AnalysisReport {
     pub proclamation_metadata: Option<serde_json::Value>,
     pub matched_articles: Option<serde_json::Value>,
     pub raw_text: Option<String>,
+    pub ai_augmented: Option<bool>,
+    pub ai_model_used: Option<String>,
+    pub ai_facts_count: Option<usize>,
+    pub ai_reasoning: Option<Vec<AIFactReasoning>>,
 }
 
 /// WebSocket Progress Stage Event
@@ -121,3 +155,4 @@ pub struct ProgressEvent {
     pub details: Option<serde_json::Value>,
     pub timestamp_ms: u64,
 }
+
