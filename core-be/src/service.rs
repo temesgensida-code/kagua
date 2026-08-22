@@ -3,13 +3,14 @@ use serde_json::{json, Map, Value};
 use tracing::error;
 
 use crate::models::{
-    AnalysisReport, ClauseSpan, EntitySpan, MappedViolation, ParserResponse, PrologViolation,
-    ReasonerRequest, ReasonerResponse,
+    AIExtractionResponse, AIFactReasoning, AIParams, AnalysisReport, ClauseSpan, EntitySpan,
+    MappedViolation, ParserResponse, PrologViolation, ReasonerRequest, ReasonerResponse,
 };
 use crate::secure_buffer::{SecureBuffer, SecureString};
 use crate::ws::WsState;
 
 const FASTAPI_PARSE_URL: &str = "http://127.0.0.1:8000/parse";
+const FASTAPI_AI_EXTRACT_URL: &str = "http://127.0.0.1:8000/ai-extract";
 const PROLOG_REASON_URL: &str = "http://127.0.0.1:8081/reason";
 
 pub async fn process_analysis_pipeline(
@@ -17,6 +18,7 @@ pub async fn process_analysis_pipeline(
     content_type: Option<String>,
     file_bytes: Vec<u8>,
     _domain_spec: Value,
+    ai_params: AIParams,
     ws_state: &WsState,
 ) -> Result<AnalysisReport, (axum::http::StatusCode, String)> {
     let bytes_len = file_bytes.len();
@@ -122,14 +124,92 @@ pub async fn process_analysis_pipeline(
     );
 
     // 3. Extract Ethiopian Labour Proclamation facts for Prolog reasoning
-    let facts = extract_prolog_facts(&parser_response);
+    let mut facts = extract_prolog_facts(&parser_response);
+
+    // 3b. AI-Augmented Fact Extraction (if AI is enabled)
+    let mut ai_augmented = false;
+    let mut ai_model_used = None;
+    let mut ai_facts_count = None;
+    let mut ai_reasoning: Option<Vec<AIFactReasoning>> = None;
+
+    if ai_params.enabled {
+        if let (Some(provider), Some(model), Some(api_key)) = (
+            ai_params.provider.as_ref(),
+            ai_params.model.as_ref(),
+            ai_params.api_key.as_ref(),
+        ) {
+            ws_state.broadcast_progress(
+                "AI_EXTRACTING",
+                &format!("Sending anonymized text to AI model '{}' ({}) for RAG fact extraction...", model, provider),
+                Some(json!({ "provider": provider, "model": model })),
+            );
+
+            let ai_req_body = json!({
+                "anonymized_text": parser_response.raw_text,
+                "provider": provider,
+                "model": model,
+                "api_key": api_key,
+                "proclamation_articles": parser_response.retrieved_chunks
+            });
+
+            match client.post(FASTAPI_AI_EXTRACT_URL).json(&ai_req_body).send().await {
+                Ok(ai_res) if ai_res.status().is_success() => {
+                    if let Ok(ai_extraction) = ai_res.json::<AIExtractionResponse>().await {
+                        let count = ai_extraction.ai_facts.len();
+                        ws_state.broadcast_progress(
+                            "AI_FACTS_RECEIVED",
+                            &format!("AI fact extraction complete. Received {} compliance facts.", count),
+                            Some(json!({ "ai_facts_count": count, "model": model })),
+                        );
+
+                        // Merge AI facts into Prolog facts map
+                        for (k, v) in ai_extraction.ai_facts {
+                            if !v.is_null() {
+                                facts.insert(k, v);
+                            }
+                        }
+
+                        ai_augmented = true;
+                        ai_model_used = Some(model.clone());
+                        ai_facts_count = Some(count);
+                        ai_reasoning = Some(ai_extraction.ai_reasoning);
+
+                        ws_state.broadcast_progress(
+                            "AI_FACTS_MERGED",
+                            "Successfully merged AI facts with in-memory RAG facts. Sending to Prolog ground-truth verifier...",
+                            None,
+                        );
+                    }
+                }
+                Err(e) => {
+                    error!("AI extraction call failed: {}", e);
+                    ws_state.broadcast_progress(
+                        "AI_EXTRACTION_WARNING",
+                        &format!("AI fact extraction failed ({}), falling back to standard in-memory Prolog matching.", e),
+                        None,
+                    );
+                }
+                Ok(res) => {
+                    let status = res.status();
+                    let err_text = res.text().await.unwrap_or_default();
+                    error!("AI extraction endpoint returned error status {}: {}", status, err_text);
+                    ws_state.broadcast_progress(
+                        "AI_EXTRACTION_WARNING",
+                        &format!("AI extraction error ({}), falling back to in-memory Prolog matching.", err_text),
+                        None,
+                    );
+                }
+            }
+        }
+    }
 
     ws_state.broadcast_progress(
         "FACTS_EXTRACTED",
-        &format!("Extracted {} Ethiopian Labour Law compliance facts from document", facts.len()),
+        &format!("Extracted {} total Ethiopian Labour Law compliance facts for reasoning", facts.len()),
         Some(json!({
             "facts": facts,
-            "governing_law": "Ethiopian Labour Proclamation No. 1156/2019"
+            "governing_law": "Ethiopian Labour Proclamation No. 1156/2019",
+            "ai_augmented": ai_augmented
         })),
     );
 
@@ -227,10 +307,15 @@ pub async fn process_analysis_pipeline(
         proclamation_metadata: parser_response.proclamation_metadata,
         matched_articles: parser_response.retrieved_chunks,
         raw_text: Some(parser_response.raw_text),
+        ai_augmented: Some(ai_augmented),
+        ai_model_used,
+        ai_facts_count,
+        ai_reasoning,
     };
 
     Ok(report)
 }
+
 
 /// Convert extracted NER entities, clauses, and RAG facts into Prolog facts.
 /// Scoped exclusively to Ethiopian Labour Proclamation No. 1156/2019.

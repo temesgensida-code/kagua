@@ -60,8 +60,9 @@
 
   function selectSample(sample: SampleDoc) {
     soundState.playClick();
+    const txtFilename = sample.filename.replace(/\.(pdf|docx)$/i, '.txt');
     const blob = new Blob([sample.content], { type: "text/plain" });
-    onFileSelected(blob, sample.filename, sample.content);
+    onFileSelected(blob, txtFilename, sample.content);
   }
 </script>
 

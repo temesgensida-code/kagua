@@ -3,15 +3,26 @@ from fastapi import FastAPI, File, UploadFile, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from pydantic import BaseModel
+from typing import Optional, List, Dict, Any
+
 from services.extractor import extract_document_text
 from services.ner import extract_entities_and_clauses
 from services.rag_engine import extract_rag_compliance_facts, anonymize_text, proclamation_corpus
+from services.ai_extractor import extract_ai_compliance_facts
 
 app = FastAPI(
     title="Kagua Ethiopian Labour Proclamation Parsing & RAG Service",
     description="FastAPI service for in-memory document parsing, spaCy NER, and privacy-preserving RAG compliance extraction against Ethiopian Labour Proclamation No. 1156/2019.",
     version="2.0.0"
 )
+
+class AIExtractRequest(BaseModel):
+    anonymized_text: str
+    provider: str
+    model: str
+    api_key: str
+    proclamation_articles: Optional[List[Dict[str, Any]]] = None
 
 # Enable CORS for frontend integration
 app.add_middleware(
@@ -32,7 +43,8 @@ def read_root():
         "status": "online",
         "endpoints": {
             "parse": "POST /parse (Upload employment contract for Ethiopian Labour Proclamation NER & RAG fact extraction)",
-            "rag_parse": "POST /rag-parse (Dedicated Ethiopian Labour Proclamation RAG fact extractor)"
+            "rag_parse": "POST /rag-parse (Dedicated Ethiopian Labour Proclamation RAG fact extractor)",
+            "ai_extract": "POST /ai-extract (LLM compliance fact extraction via Grok, Gemini, or GPT)"
         }
     }
 
@@ -139,4 +151,27 @@ async def rag_parse_document(file: UploadFile = File(...)):
         "retrieved_chunks": rag_result["retrieved_chunks"],
         "proclamation_metadata": rag_result["proclamation_metadata"]
     })
+
+@app.post("/ai-extract")
+async def ai_extract_facts(req: AIExtractRequest):
+    """
+    POST /ai-extract endpoint:
+    Proxies anonymized contract text + Ethiopian Labour Law context to LLM provider (Grok, Gemini, or GPT),
+    returning structured compliance facts and reasoning for Prolog truth checking.
+    """
+    try:
+        res = await extract_ai_compliance_facts(
+            provider=req.provider,
+            model=req.model,
+            api_key=req.api_key,
+            anonymized_text=req.anonymized_text,
+            proclamation_articles=req.proclamation_articles
+        )
+        return JSONResponse(status_code=200, content=res)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI fact extraction failed: {str(e)}"
+        )
+
 
