@@ -1,3 +1,7 @@
+mod auth;
+mod db;
+mod email;
+mod handlers;
 mod models;
 mod pdf;
 mod secure_buffer;
@@ -9,36 +13,93 @@ use std::sync::Arc;
 use axum::{
     extract::{Multipart, State},
     http::{header, HeaderMap, StatusCode},
+
     response::{IntoResponse, Json},
     routing::{get, post},
     Router,
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{CorsLayer};
+use axum::http::{Method, HeaderValue};
 use tracing::info;
 
+use crate::auth::middleware::AppState;
 use crate::models::{AIParams, AnalysisReport};
 use crate::pdf::generate_audit_pdf;
 use crate::service::process_analysis_pipeline;
 use crate::ws::{ws_handler, WsState};
+use crate::handlers::auth as auth_handlers;
 
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    // Load .env file
+    dotenvy::dotenv().ok();
+
+    // Read required env vars
+    let database_url = std::env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set in .env");
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .expect("JWT_SECRET must be set in .env");
+    let resend_api_key = std::env::var("RESEND_API_KEY")
+        .unwrap_or_default();
+    let from_email = std::env::var("FROM_EMAIL")
+        .unwrap_or_else(|_| "noreply@kagua.temesgen.works".to_string());
+    let from_name = std::env::var("FROM_NAME")
+        .unwrap_or_else(|_| "Kagua".to_string());
+    let frontend_url = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:5173".to_string());
+
+    // Initialize DB pool and run migrations
+    let db = db::init_db(&database_url).await;
+
     let ws_state = Arc::new(WsState::new());
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    // Build shared application state
+    let app_state = AppState {
+        db,
+        jwt_secret,
+        resend_api_key,
+        from_email,
+        from_name,
+        frontend_url,
+        ws_state: ws_state.clone(),
+    };
 
+    let frontend_origin: HeaderValue = std::env::var("FRONTEND_URL")
+        .unwrap_or_else(|_| "http://localhost:5173".to_string())
+        .parse()
+        .expect("Invalid FRONTEND_URL");
+
+    let cors = CorsLayer::new()
+        .allow_origin(frontend_origin)
+        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+        .allow_credentials(true);
+
+    // ── Auth routes (public) ──────────────────────────────────────────────
+    let auth_router = Router::new()
+        .route("/register", post(auth_handlers::register))
+        .route("/verify-email", post(auth_handlers::verify_email))
+        .route("/resend-verification", post(auth_handlers::resend_verification))
+        .route("/login", post(auth_handlers::login))
+        .route("/refresh", post(auth_handlers::refresh_token))
+        .route("/logout", post(auth_handlers::logout))
+        .route("/forgot-password", post(auth_handlers::forgot_password))
+        .route("/reset-password", post(auth_handlers::reset_password))
+        .route("/me", get(auth_handlers::me));
+
+    // ── Main application ──────────────────────────────────────────────────
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/ws", get(ws_handler))
+        // Protected routes — require a valid Bearer JWT
         .route("/analyze", post(analyze_handler))
         .route("/report/pdf", post(generate_pdf_handler))
+        // Auth routes mounted under /auth
+        .nest("/auth", auth_router)
         .layer(cors)
-        .with_state(ws_state);
+        .with_state(app_state);
 
     let port: u16 = std::env::var("PORT")
         .ok()
@@ -69,9 +130,12 @@ async fn health_check() -> Json<serde_json::Value> {
 }
 
 async fn analyze_handler(
-    State(ws_state): State<Arc<WsState>>,
+    State(state): State<AppState>,
+    auth_user: crate::auth::middleware::AuthUser,
     mut multipart: Multipart,
 ) -> Result<Json<AnalysisReport>, (StatusCode, String)> {
+    let _ = auth_user; // Auth is verified; user info available if needed for auditing
+
     let mut filename = String::from("document.pdf");
     let mut content_type = None;
     let mut file_bytes: Option<Vec<u8>> = None;
@@ -105,19 +169,13 @@ async fn analyze_handler(
             ai_params.enabled = text == "true" || text == "1";
         } else if name == "ai_provider" {
             let text = field.text().await.unwrap_or_default();
-            if !text.is_empty() {
-                ai_params.provider = Some(text);
-            }
+            if !text.is_empty() { ai_params.provider = Some(text); }
         } else if name == "ai_model" {
             let text = field.text().await.unwrap_or_default();
-            if !text.is_empty() {
-                ai_params.model = Some(text);
-            }
+            if !text.is_empty() { ai_params.model = Some(text); }
         } else if name == "ai_api_key" {
             let text = field.text().await.unwrap_or_default();
-            if !text.is_empty() {
-                ai_params.api_key = Some(text);
-            }
+            if !text.is_empty() { ai_params.api_key = Some(text); }
         }
     }
 
@@ -129,31 +187,35 @@ async fn analyze_handler(
         return Err((StatusCode::BAD_REQUEST, "Uploaded file stream is empty".to_string()));
     }
 
-    let report = process_analysis_pipeline(filename, content_type, bytes, domain_spec, ai_params, &ws_state).await?;
+    let report = process_analysis_pipeline(
+        filename, content_type, bytes, domain_spec, ai_params, &state.ws_state
+    ).await?;
+
 
     Ok(Json(report))
 }
 
 async fn generate_pdf_handler(
+    State(state): State<AppState>,
+    auth_user: crate::auth::middleware::AuthUser,
     Json(report): Json<AnalysisReport>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let _ = (state, auth_user);
+
     let pdf_bytes = generate_audit_pdf(&report).map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("PDF generation error: {}", e),
-        )
+        (StatusCode::INTERNAL_SERVER_ERROR, format!("PDF generation error: {}", e))
     })?;
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        header::CONTENT_TYPE,
-        "application/pdf".parse().unwrap(),
-    );
+    headers.insert(header::CONTENT_TYPE, "application/pdf".parse().unwrap());
     headers.insert(
         header::CONTENT_DISPOSITION,
-        format!("attachment; filename=\"kagua_audit_{}\"", report.filename.replace(".txt", ".pdf").replace(".docx", ".pdf"))
-            .parse()
-            .unwrap(),
+        format!(
+            "attachment; filename=\"kagua_audit_{}\"",
+            report.filename.replace(".txt", ".pdf").replace(".docx", ".pdf")
+        )
+        .parse()
+        .unwrap(),
     );
 
     Ok((headers, pdf_bytes))

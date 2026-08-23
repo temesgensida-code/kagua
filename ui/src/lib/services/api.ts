@@ -58,8 +58,15 @@ export interface AIConfigParams {
   apiKey?: string;
 }
 
+import { authStore } from './authStore.svelte';
+
 const API_BASE = 'http://127.0.0.1:8080';
 const WS_BASE = 'ws://127.0.0.1:8080/ws';
+
+function authHeaders(): HeadersInit {
+  const token = authStore.accessToken;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 export async function analyzeDocument(
   fileData: Blob | File,
@@ -82,6 +89,7 @@ export async function analyzeDocument(
 
   const response = await fetch(`${API_BASE}/analyze`, {
     method: 'POST',
+    headers: authHeaders(),
     body: formData,
   });
 
@@ -98,6 +106,7 @@ export async function downloadPdfAuditReport(report: AnalysisReport): Promise<vo
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      ...authHeaders(),
     },
     body: JSON.stringify(report),
   });

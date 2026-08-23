@@ -37,10 +37,11 @@ impl WsState {
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
-    axum::extract::State(state): axum::extract::State<Arc<WsState>>,
+    axum::extract::State(state): axum::extract::State<crate::auth::middleware::AppState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    ws.on_upgrade(move |socket| handle_socket(socket, state.ws_state.clone()))
 }
+
 
 async fn handle_socket(mut socket: WebSocket, state: Arc<WsState>) {
     info!("WebSocket client connected for progress streaming");

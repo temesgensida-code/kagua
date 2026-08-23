@@ -1,0 +1,99 @@
+<script lang="ts">
+  import favicon from '$lib/assets/favicon.svg';
+  import '../../app.css';
+  import { authStore } from '$lib/services/authStore.svelte';
+  import { logout } from '$lib/services/authApi';
+  import { goto } from '$app/navigation';
+
+  let { children } = $props();
+
+  async function handleLogout() {
+    await logout();
+    await goto('/login');
+  }
+</script>
+
+<svelte:head>
+  <link rel="icon" href={favicon} />
+</svelte:head>
+
+<div class="app-root">
+  <div class="bg-grid"></div>
+  <div class="bg-paper-texture"></div>
+  <div class="bg-glow"></div>
+
+  <!-- Minimal session bar -->
+  <div class="session-bar">
+    <span class="session-email">{authStore.user?.email ?? ''}</span>
+    <button class="logout-btn" onclick={handleLogout}>SIGN OUT</button>
+  </div>
+
+  <main class="app-main">
+    {@render children()}
+  </main>
+</div>
+
+<style>
+  .app-root {
+    position: relative;
+    min-height: 100vh;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 1rem 1rem 0.5rem 1rem;
+    overflow-x: hidden;
+  }
+
+  .app-main {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1680px;
+    margin: 0 auto;
+    padding: 0 0.5rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  /* Session bar */
+  .session-bar {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 1680px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1rem;
+    padding: 0.4rem 0.5rem 0.75rem;
+  }
+
+  .session-email {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+
+  .logout-btn {
+    background: none;
+    border: 1px solid rgba(0, 240, 255, 0.18);
+    border-radius: 4px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    padding: 0.3rem 0.7rem;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .logout-btn:hover {
+    color: var(--pink-accent);
+    border-color: var(--pink-accent);
+  }
+</style>
