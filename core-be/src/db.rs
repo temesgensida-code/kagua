@@ -24,6 +24,25 @@ pub async fn init_db(database_url: &str) -> PgPool {
         .await
         .expect("Migration 003 failed");
 
+    info!("Seeding test user...");
+    if let Ok(hash) = crate::auth::password::hash_password("@Te1to2ge3si4") {
+        let seed_res = sqlx::query(
+            "INSERT INTO users (email, password_hash, is_verified) \
+             VALUES ('test@gmail.com', $1, TRUE) \
+             ON CONFLICT (email) DO UPDATE SET password_hash = $1, is_verified = TRUE"
+        )
+        .bind(&hash)
+        .execute(&pool)
+        .await;
+
+        if let Err(e) = seed_res {
+            tracing::warn!("Failed to seed test user: {}", e);
+        } else {
+            info!("Test user test@gmail.com initialized.");
+        }
+    }
+
     info!("Database ready.");
     pool
 }
+

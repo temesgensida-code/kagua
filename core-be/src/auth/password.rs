@@ -22,3 +22,17 @@ pub fn verify_password(password: &str, hash: &str) -> Result<bool, String> {
         .verify_password(password.as_bytes(), &parsed_hash)
         .is_ok())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_password_hash_and_verify() {
+        let raw = "@Te1to2ge3si4";
+        let hash = hash_password(raw).expect("hash success");
+        assert!(verify_password(raw, &hash).unwrap());
+    }
+}
+
+

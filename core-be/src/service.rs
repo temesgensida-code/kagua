@@ -17,7 +17,7 @@ pub async fn process_analysis_pipeline(
     filename: String,
     content_type: Option<String>,
     file_bytes: Vec<u8>,
-    _domain_spec: Value,
+    domain_spec: Value,
     ai_params: AIParams,
     ws_state: &WsState,
 ) -> Result<AnalysisReport, (axum::http::StatusCode, String)> {
@@ -39,6 +39,17 @@ pub async fn process_analysis_pipeline(
         None,
     );
 
+    let domain_requested = match &domain_spec {
+        Value::String(s) => s.clone(),
+        _ => "auto".to_string(),
+    };
+
+    let parse_url = if domain_requested != "auto" && domain_requested != "all" {
+        format!("{}?domain={}", FASTAPI_PARSE_URL, domain_requested)
+    } else {
+        FASTAPI_PARSE_URL.to_string()
+    };
+
     let client = reqwest::Client::new();
     let mut part = Part::bytes(secure_bytes.as_slice().to_vec()).file_name(filename.clone());
     if let Some(ref mime) = content_type {
@@ -53,7 +64,7 @@ pub async fn process_analysis_pipeline(
     let form = Form::new().part("file", part);
 
     let parse_res = client
-        .post(FASTAPI_PARSE_URL)
+        .post(&parse_url)
         .multipart(form)
         .send()
         .await
@@ -92,15 +103,37 @@ pub async fn process_analysis_pipeline(
     let suggested_domain = parser_response.summary.suggested_domain.clone();
     let detected_jurisdiction = parser_response.summary.detected_jurisdiction.clone();
 
-    // Domain is locked to Ethiopian Labour Proclamation No. 1156/2019
-    let final_domain_spec = json!("ethiopian_labour_proclamation");
+    // Determine active legal domain (Labour Law vs Commercial Code)
+    let active_domain = if domain_requested != "auto" && domain_requested != "all" {
+        if domain_requested.contains("commercial") {
+            "commercial_code".to_string()
+        } else {
+            "ethiopian_labour_proclamation".to_string()
+        }
+    } else if let Some(ref sugg) = suggested_domain {
+        if sugg.contains("commercial") {
+            "commercial_code".to_string()
+        } else {
+            "ethiopian_labour_proclamation".to_string()
+        }
+    } else {
+        "ethiopian_labour_proclamation".to_string()
+    };
+
+    let governing_law = if active_domain == "commercial_code" {
+        "Ethiopian Commercial Code Proclamation No. 1243/2021"
+    } else {
+        "Ethiopian Labour Proclamation No. 1156/2019"
+    };
+
+    let final_domain_spec = json!(active_domain);
 
     ws_state.broadcast_progress(
         "DOMAIN_SELECTED",
-        "Using Ethiopian Labour Proclamation No. 1156/2019 compliance rule pack",
+        &format!("Using {} compliance rule pack", governing_law),
         Some(json!({
-            "domain": "ethiopian_labour_proclamation",
-            "governing_law": "Ethiopian Labour Proclamation No. 1156/2019",
+            "domain": active_domain,
+            "governing_law": governing_law,
             "jurisdiction": detected_jurisdiction
         })),
     );
@@ -123,8 +156,8 @@ pub async fn process_analysis_pipeline(
         })),
     );
 
-    // 3. Extract Ethiopian Labour Proclamation facts for Prolog reasoning
-    let mut facts = extract_prolog_facts(&parser_response);
+    // 3. Extract Ethiopian legal compliance facts for Prolog reasoning
+    let mut facts = extract_prolog_facts(&parser_response, &active_domain);
 
     // 3b. AI-Augmented Fact Extraction (if AI is enabled)
     let mut ai_augmented = false;
@@ -141,7 +174,7 @@ pub async fn process_analysis_pipeline(
             ws_state.broadcast_progress(
                 "AI_EXTRACTING",
                 &format!("Sending anonymized text to AI model '{}' ({}) for RAG fact extraction...", model, provider),
-                Some(json!({ "provider": provider, "model": model })),
+                Some(json!({ "provider": provider, "model": model, "domain": active_domain })),
             );
 
             let ai_req_body = json!({
@@ -149,7 +182,8 @@ pub async fn process_analysis_pipeline(
                 "provider": provider,
                 "model": model,
                 "api_key": api_key,
-                "proclamation_articles": parser_response.retrieved_chunks
+                "proclamation_articles": parser_response.retrieved_chunks,
+                "domain": active_domain
             });
 
             match client.post(FASTAPI_AI_EXTRACT_URL).json(&ai_req_body).send().await {
@@ -205,10 +239,10 @@ pub async fn process_analysis_pipeline(
 
     ws_state.broadcast_progress(
         "FACTS_EXTRACTED",
-        &format!("Extracted {} total Ethiopian Labour Law compliance facts for reasoning", facts.len()),
+        &format!("Extracted {} total {} compliance facts for reasoning", facts.len(), governing_law),
         Some(json!({
             "facts": facts,
-            "governing_law": "Ethiopian Labour Proclamation No. 1156/2019",
+            "governing_law": governing_law,
             "ai_augmented": ai_augmented
         })),
     );
@@ -318,15 +352,19 @@ pub async fn process_analysis_pipeline(
 
 
 /// Convert extracted NER entities, clauses, and RAG facts into Prolog facts.
-/// Scoped exclusively to Ethiopian Labour Proclamation No. 1156/2019.
-/// The RAG engine already produces correctly structured facts — this function
-/// acts as a thin pass-through, only adding jurisdiction from NER if missing.
-fn extract_prolog_facts(parser_res: &ParserResponse) -> Map<String, Value> {
+/// Supports both Ethiopian Labour Proclamation No. 1156/2019 and Commercial Code No. 1243/2021.
+fn extract_prolog_facts(parser_res: &ParserResponse, active_domain: &str) -> Map<String, Value> {
     let mut facts = Map::new();
 
+    let governing_law = if active_domain == "commercial_code" {
+        "Ethiopian Commercial Code Proclamation No. 1243/2021"
+    } else {
+        "Ethiopian Labour Proclamation No. 1156/2019"
+    };
+
     // 1. Set domain and governing law
-    facts.insert("domain".to_string(), json!("ethiopian_labour_proclamation"));
-    facts.insert("governing_law".to_string(), json!("Ethiopian Labour Proclamation No. 1156/2019"));
+    facts.insert("domain".to_string(), json!(active_domain));
+    facts.insert("governing_law".to_string(), json!(governing_law));
 
     // 2. Jurisdiction from NER detection
     if let Some(ref jurisdiction) = parser_res.summary.detected_jurisdiction {
@@ -335,9 +373,7 @@ fn extract_prolog_facts(parser_res: &ParserResponse) -> Map<String, Value> {
         facts.insert("jurisdiction".to_string(), json!(jurisdiction));
     }
 
-    // 3. Merge RAG-extracted Ethiopian Labour Proclamation facts directly
-    //    The Python RAG engine (rag_engine.py) already extracts correctly keyed
-    //    facts like probation_days, working_hours_per_day, notice_period_days, etc.
+    // 3. Merge RAG-extracted facts directly
     if let Some(ref rag_obj) = parser_res.rag_facts {
         if let Some(obj_map) = rag_obj.as_object() {
             for (k, v) in obj_map {
@@ -346,9 +382,10 @@ fn extract_prolog_facts(parser_res: &ParserResponse) -> Map<String, Value> {
         }
     }
 
-    // 4. Map detected Ethiopian clause types to boolean presence facts
+    // 4. Map detected clause types to boolean presence facts
     for clause_type in &parser_res.summary.detected_clause_types {
         match clause_type.as_str() {
+            // Labour Law Clauses
             "ETHIOPIAN_PROBATION_PERIOD" => {
                 facts.insert("has_probation_clause".to_string(), json!(true));
             }
@@ -381,6 +418,38 @@ fn extract_prolog_facts(parser_res: &ParserResponse) -> Map<String, Value> {
             }
             "ETHIOPIAN_CONTRACT_FORMATION" => {
                 facts.insert("has_written_contract_provision".to_string(), json!(true));
+            }
+
+            // Commercial Code Clauses
+            "COMMERCIAL_COMPANY_CAPITAL" => {
+                facts.insert("has_capital_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_SHARE_PAR_VALUE" => {
+                facts.insert("has_par_value_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_FOUNDERS_MEMBERS" => {
+                facts.insert("has_founders_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_BOARD_DIRECTORS" => {
+                facts.insert("has_board_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_LEGAL_RESERVE" => {
+                facts.insert("has_reserve_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_DIVIDEND_DISTRIBUTION" => {
+                facts.insert("has_dividend_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_ACCOUNTING_AUDIT" => {
+                facts.insert("has_accounting_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_TRANSFERABLE_SECURITIES" => {
+                facts.insert("has_securities_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_RECORD_RETENTION" => {
+                facts.insert("has_record_retention_clause".to_string(), json!(true));
+            }
+            "COMMERCIAL_FICTITIOUS_DIVIDENDS" => {
+                facts.insert("has_fictitious_dividend_clause".to_string(), json!(true));
             }
             _ => {}
         }
@@ -419,9 +488,10 @@ fn map_violations_to_offsets(
         let mut end_char = None;
         let mut snippet_str: Option<String> = None;
 
-        // Match violations to Ethiopian Labour Proclamation clause spans
+        // Match violations to clause spans (Labour Law & Commercial Code)
         for clause in clauses {
             let matches_clause = match v.rule.as_str() {
+                // Labour Law rules
                 r if r.contains("Article 11") => clause.clause_type == "ETHIOPIAN_PROBATION_PERIOD",
                 r if r.contains("Article 61") => clause.clause_type == "ETHIOPIAN_WORKING_HOURS",
                 r if r.contains("Article 14") => clause.clause_type == "ETHIOPIAN_PROHIBITED_ACTS",
@@ -433,6 +503,18 @@ fn map_violations_to_offsets(
                 r if r.contains("Article 39") => clause.clause_type == "ETHIOPIAN_SEVERANCE_PAY",
                 r if r.contains("Article 67") || r.contains("Article 68") => clause.clause_type == "ETHIOPIAN_OVERTIME",
                 r if r.contains("Article 4") || r.contains("Article 6") || r.contains("Article 7") => clause.clause_type == "ETHIOPIAN_CONTRACT_FORMATION",
+
+                // Commercial Code rules
+                r if r.contains("Article 247") || r.contains("Article 496") || r.contains("Article 249") || r.contains("Article 498") => {
+                    clause.clause_type == "COMMERCIAL_COMPANY_CAPITAL" || clause.clause_type == "COMMERCIAL_SHARE_PAR_VALUE"
+                }
+                r if r.contains("Article 252") || r.contains("Article 495") => clause.clause_type == "COMMERCIAL_FOUNDERS_MEMBERS",
+                r if r.contains("Article 254") || r.contains("Article 499") => clause.clause_type == "COMMERCIAL_COMPANY_CAPITAL",
+                r if r.contains("Article 296") => clause.clause_type == "COMMERCIAL_BOARD_DIRECTORS",
+                r if r.contains("Article 307") || r.contains("Article 524") => clause.clause_type == "COMMERCIAL_LEGAL_RESERVE",
+                r if r.contains("Article 306") => clause.clause_type == "COMMERCIAL_DIVIDEND_DISTRIBUTION" || clause.clause_type == "COMMERCIAL_FICTITIOUS_DIVIDENDS",
+                r if r.contains("Article 502") => clause.clause_type == "COMMERCIAL_TRANSFERABLE_SECURITIES",
+                r if r.contains("Article 288") => clause.clause_type == "COMMERCIAL_RECORD_RETENTION" || clause.clause_type == "COMMERCIAL_ACCOUNTING_AUDIT",
                 _ => false,
             };
 
@@ -467,7 +549,7 @@ fn map_violations_to_offsets(
             snippet_str = Some(slice);
         }
 
-        // Attach statutory article citation & exact Proclamation No. 1156/2019 statutory text
+        // Attach statutory article citation & exact statutory text
         let (article_citation, statutory_text) = lookup_statutory_citation(&v.rule, retrieved_chunks);
 
         mapped.push(MappedViolation {
@@ -488,7 +570,7 @@ fn map_violations_to_offsets(
     mapped
 }
 
-/// Lookup statutory article citation and exact text for Ethiopian Labour Proclamation No. 1156/2019
+/// Lookup statutory article citation and exact text for Ethiopian Proclamations (Labour & Commercial Code)
 fn lookup_statutory_citation(
     rule: &str,
     retrieved_chunks: Option<&Value>,
@@ -496,21 +578,26 @@ fn lookup_statutory_citation(
     // 1. Check retrieved_chunks from Python RAG response
     if let Some(chunks) = retrieved_chunks.and_then(|v| v.as_array()) {
         for chk in chunks {
-            if chk.get("source").and_then(|s| s.as_str()) == Some("ethiopian_labour_proclamation_1156_2019") {
-                let art_num = chk.get("article_number").and_then(|n| n.as_i64()).unwrap_or(0);
-                let art_str = format!("Article {}", art_num);
-                if rule.contains(&art_str) {
-                    let title = chk.get("article_title").and_then(|s| s.as_str()).unwrap_or("");
-                    let snippet = chk.get("snippet").and_then(|s| s.as_str()).unwrap_or("");
-                    let citation = format!("Ethiopian Labour Proclamation No. 1156/2019 - Article {} ({})", art_num, title);
-                    return (Some(citation), Some(snippet.to_string()));
-                }
+            let src = chk.get("source").and_then(|s| s.as_str()).unwrap_or("");
+            let art_num = chk.get("article_number").and_then(|n| n.as_i64()).unwrap_or(0);
+            let art_str = format!("Article {}", art_num);
+            if rule.contains(&art_str) {
+                let title = chk.get("article_title").and_then(|s| s.as_str()).unwrap_or("");
+                let snippet = chk.get("snippet").and_then(|s| s.as_str()).unwrap_or("");
+                let proc_name = if src.contains("commercial") {
+                    "Ethiopian Commercial Code Proclamation No. 1243/2021"
+                } else {
+                    "Ethiopian Labour Proclamation No. 1156/2019"
+                };
+                let citation = format!("{} - Article {} ({})", proc_name, art_num, title);
+                return (Some(citation), Some(snippet.to_string()));
             }
         }
     }
 
-    // 2. Fallback statutory lookup table for Ethiopian Labour Proclamation No. 1156/2019
+    // 2. Fallback statutory lookup table
     let (citation, statutory) = match rule {
+        // Labour Law Rules (Proclamation No. 1156/2019)
         r if r.contains("Article 11") => (
             "Ethiopian Labour Proclamation No. 1156/2019 - Article 11(3)",
             "Article 11(3): The period of probation shall be fixed by mutual agreement of the parties; provided, however, that it shall not exceed 60 (sixty) working days."
@@ -554,6 +641,60 @@ fn lookup_statutory_citation(
         r if r.contains("Article 6") => (
             "Ethiopian Labour Proclamation No. 1156/2019 - Article 6",
             "Article 6: Where a contract of employment is not made in writing, the employer shall issue a signed letter of employment containing essential terms within 15 days."
+        ),
+
+        // Commercial Code Rules (Proclamation No. 1243/2021)
+        r if r.contains("Article 247(1)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 247(1)",
+            "Article 247(1): The capital of a share company shall not be less than 50,000 (fifty thousand) Ethiopian Birr."
+        ),
+        r if r.contains("Article 496(1)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 496(1)",
+            "Article 496(1): The capital of a private limited company shall not be less than 15,000 (fifteen thousand) Ethiopian Birr."
+        ),
+        r if r.contains("Article 247(2)") || r.contains("Article 496(2)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 247(2) & 496(2)",
+            "Articles 247(2) & 496(2): The par value of a share in a share company or private limited company shall not be less than 100 Ethiopian Birr."
+        ),
+        r if r.contains("Article 252(2)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 252(2)",
+            "Article 252(2): A share company shall be established by at least 5 (five) founders."
+        ),
+        r if r.contains("Article 495(4)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 495(4)",
+            "Article 495(4): A private limited company (PLC) shall be established by at least 2 (two) members and not more than 50 members."
+        ),
+        r if r.contains("Article 254(1)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 254(1)",
+            "Article 254(1): At least 25% of the subscribed capital of a share company shall be paid up at the time of establishment."
+        ),
+        r if r.contains("Article 499(1)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 499(1)",
+            "Article 499(1): The capital of a private limited company (PLC) shall be fully paid up (100%) upon establishment."
+        ),
+        r if r.contains("Article 296(1)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 296(1)",
+            "Article 296(1): A share company shall be managed by a Board of Directors comprising not less than 3 and not more than 12 members. The majority of directors shall be non-executive."
+        ),
+        r if r.contains("Article 296(2)") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 296(2)",
+            "Article 296(2): Directors who are non-shareholders shall not exceed two-thirds (2/3) of the total members of the Board of Directors."
+        ),
+        r if r.contains("Article 307(1)") || r.contains("Article 524") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 307(1) & 524",
+            "Articles 307(1) & 524: At least 5% of net profits shall be transferred annually to the legal reserve fund until it reaches 20% of the capital."
+        ),
+        r if r.contains("Article 502") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 502",
+            "Article 502: A private limited company (PLC) is strictly prohibited from issuing bonds, debentures, or transferable securities."
+        ),
+        r if r.contains("Article 288") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 288",
+            "Article 288: Books of accounts and financial accounting records shall be preserved for a minimum period of 10 years."
+        ),
+        r if r.contains("Article 306") => (
+            "Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 306",
+            "Article 306: Dividends shall only be distributed from actual net profits realized. Distribution of fictitious dividends is prohibited."
         ),
         _ => return (None, None),
     };
