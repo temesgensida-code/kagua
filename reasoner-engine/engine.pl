@@ -34,17 +34,23 @@
 
 %% available_domains(-Domains)
 %% Lists all known domain identifiers.
-available_domains([ethiopian_labour_proclamation, employment]).
+available_domains([ethiopian_labour_proclamation, employment, commercial_code, commercial_code_ethiopia, ethiopian_commercial_code]).
 
 %% domain_file(+Domain, -Path)
 %% Maps a domain atom to its rule file path, relative to the rules/ directory.
 domain_file(ethiopian_labour_proclamation, 'rules/employment.pl').
 domain_file(employment,                    'rules/employment.pl').
+domain_file(commercial_code,               'rules/commercial_code.pl').
+domain_file(commercial_code_ethiopia,      'rules/commercial_code.pl').
+domain_file(ethiopian_commercial_code,     'rules/commercial_code.pl').
 
 %% domain_module(+Domain, -Module)
 %% Maps a domain atom to its Prolog module name.
 domain_module(ethiopian_labour_proclamation, employment).
 domain_module(employment,                    employment).
+domain_module(commercial_code,               commercial_code).
+domain_module(commercial_code_ethiopia,      commercial_code).
+domain_module(ethiopian_commercial_code,     commercial_code).
 
 
 

@@ -18,6 +18,10 @@ PROCLAMATION_JSON_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "jsons", "labour_proclamation_1156_2019.json")
 )
 
+COMMERCIAL_CODE_JSON_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "jsons", "commercial_code_ethiopia_1243_2021.json")
+)
+
 # -----------------------------------------------------------------------------
 # 0. Legal Number Normalizer (Phase 2)
 #    Parses numbers written as digits, written words, or parenthesized formats
@@ -26,6 +30,8 @@ PROCLAMATION_JSON_PATH = os.path.abspath(
 
 # Explicit map for high-priority statutory values used in Ethiopian Labour Law
 LEGAL_WORD_TO_NUMBER: dict[str, int] = {
+    "fifty thousand": 50000, "15,000": 15000, "50,000": 50000,
+    "fifteen thousand": 15000, "one hundred thousand": 100000,
     "one hundred and twenty": 120, "one hundred twenty": 120,
     "forty-eight": 48, "twenty-four": 24, "seventy-two": 72,
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
@@ -358,6 +364,78 @@ class EthiopianLabourProclamationCorpus:
 proclamation_corpus = EthiopianLabourProclamationCorpus()
 
 
+class EthiopianCommercialCodeCorpus:
+    """
+    Loads and structures all 832 articles from parser/jsons/commercial_code_ethiopia_1243_2021.json
+    into an indexed in-memory legal knowledge base.
+    """
+    def __init__(self, json_path: str = COMMERCIAL_CODE_JSON_PATH):
+        self.json_path = json_path
+        self.metadata: Dict[str, Any] = {}
+        self.articles: List[Dict[str, Any]] = []
+        self._load_and_parse()
+        self.index = InMemoryVectorIndex(items=self.articles)
+
+    def _load_and_parse(self):
+        if not os.path.exists(self.json_path):
+            return
+
+        with open(self.json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        self.metadata = {
+            "proclamation_title": data.get("proclamation_title", "Commercial Code of Ethiopia Proclamation No. 1243/2021"),
+            "country": data.get("country", "Federal Democratic Republic of Ethiopia"),
+            "publication": data.get("publication", "Federal Negarit Gazette, 12th April 2021")
+        }
+
+        def traverse(node: Any, context_path: str = ""):
+            if isinstance(node, dict):
+                ctx = context_path
+                if "title" in node and node["title"]:
+                    ctx = f"{ctx} > {node['title']}" if ctx else node["title"]
+
+                if "article_number" in node:
+                    art_num = node["article_number"]
+                    art_title = node.get("title", "")
+                    art_text = node.get("text", "")
+                    sub_arts = node.get("sub_articles", [])
+
+                    sub_texts = []
+                    for sa in sub_arts:
+                        sa_num = sa.get("sub_article_number", "")
+                        sa_text = sa.get("text", "")
+                        clauses = sa.get("clauses", [])
+                        c_texts = [f"({c.get('clause','')}) {c.get('text','')}" for c in clauses]
+                        full_sa = f"({sa_num}) {sa_text} " + " ".join(c_texts)
+                        sub_texts.append(full_sa)
+
+                    full_art_text = f"Article {art_num} - {art_title}: {art_text} " + " ".join(sub_texts)
+                    self.articles.append({
+                        "article_number": art_num,
+                        "title": art_title,
+                        "context": ctx,
+                        "text": full_art_text.strip(),
+                        "full_text": full_art_text.strip()
+                    })
+
+                for k, v in node.items():
+                    if k != "sub_articles":
+                        traverse(v, ctx)
+            elif isinstance(node, list):
+                for item in node:
+                    traverse(item, context_path)
+
+        traverse(data)
+
+    def search_proclamation(self, query: str, top_k: int = 2) -> List[Dict[str, Any]]:
+        return self.index.query(query, top_k=top_k)
+
+
+# Initialize global Commercial Code Corpus singleton
+commercial_code_corpus = EthiopianCommercialCodeCorpus()
+
+
 # -----------------------------------------------------------------------------
 # 4. Ethiopian Labour Proclamation Fact Extractor for Prolog Reasoning
 # -----------------------------------------------------------------------------
@@ -626,7 +704,7 @@ def _detect_any_synonym(text_lower: str, synonyms: list) -> str | None:
     return None
 
 
-def extract_rag_compliance_facts(raw_text: str) -> Dict[str, Any]:
+def extract_labour_compliance_facts(raw_text: str) -> Dict[str, Any]:
 
     """
     Ethiopian Labour Proclamation No. 1156/2019 RAG Pipeline:
@@ -1129,4 +1207,344 @@ def extract_rag_compliance_facts(raw_text: str) -> Dict[str, Any]:
         "retrieved_chunks": all_chunks,
         "proclamation_metadata": proclamation_corpus.metadata
     }
+
+
+# -----------------------------------------------------------------------------
+# 5. Ethiopian Commercial Code Proclamation No. 1243/2021 Fact Extractor
+# -----------------------------------------------------------------------------
+ETHIOPIAN_COMMERCIAL_QUERIES = {
+    "company_type": "share company private limited company plc one-person company business organization Article 174 245 495",
+    "capital": "registered capital fixed capital capital of company 50000 15000 Birr ETB Article 247 496",
+    "share_par_value": "par value per share 100 Birr ETB Article 247(2) 496(2)",
+    "founders_members": "founders subscribers number of members 5 founders 2 members 50 members Article 252 495",
+    "board_directors": "board of directors 3 directors 13 directors non-executive non-shareholders Article 296",
+    "director_loans": "loan to director guarantee security holding company auditor report Article 307",
+    "legal_reserve": "legal reserve fund 5 percent net profits 10 percent capital Article 434 528",
+    "dividends": "dividends net profit fictitious dividends 4 months payment delay Article 438",
+    "record_retention": "books of accounts accounting records 10 years preservation Article 66",
+    "in_kind_valuation": "contributions in kind non-cash contribution expert valuation report Article 257",
+    "transferable_securities": "transferable securities bonds debentures PLC public subscription Article 180 495",
+    "single_member_plc": "single member one-person plc 6 months conversion Article 498"
+}
+
+def extract_commercial_code_compliance_facts(raw_text: str) -> Dict[str, Any]:
+    """
+    Ethiopian Commercial Code Proclamation No. 1243/2021 RAG Pipeline:
+    1. Anonymize user sensitive data (PII/PHI).
+    2. Build in-memory vector index over uploaded document.
+    3. Query document using Ethiopian Commercial Code queries.
+    4. Retrieve corresponding reference Articles from parser/jsons/commercial_code_ethiopia_1243_2021.json.
+    5. Extract structured compliance facts for SWI-Prolog reasoning against commercial_code.pl.
+    """
+    sanitized_text, pii_map = anonymize_text(raw_text)
+    doc_index = InMemoryVectorIndex(raw_text=sanitized_text)
+
+    retrieved_doc_contexts: Dict[str, List[Dict[str, Any]]] = {}
+    retrieved_proclamation_articles: Dict[str, List[Dict[str, Any]]] = {}
+
+    for key, q_str in ETHIOPIAN_COMMERCIAL_QUERIES.items():
+        retrieved_doc_contexts[key] = doc_index.query(q_str, top_k=2)
+        retrieved_proclamation_articles[key] = commercial_code_corpus.search_proclamation(q_str, top_k=1)
+
+    prolog_facts: Dict[str, Any] = {
+        "domain": "commercial_code",
+        "governing_law": "Ethiopian Commercial Code Proclamation No. 1243/2021",
+        "jurisdiction": "Ethiopia"
+    }
+    fact_provenance: Dict[str, Any] = {}
+    full_lower = raw_text.lower()
+
+    # 1. Company Type Detection
+    if "private limited company" in full_lower or "p.l.c." in full_lower or " plc" in full_lower or "plc " in full_lower:
+        comp_type = "plc"
+    elif "share company" in full_lower or "s.c." in full_lower or "share company" in full_lower:
+        comp_type = "share_company"
+    else:
+        comp_type = "share_company"
+    prolog_facts["company_type"] = comp_type
+    fact_provenance["company_type"] = {
+        "value": comp_type,
+        "source_text": f"Detected company type: '{comp_type}'",
+        "article_reference": "Article 174"
+    }
+
+    # 2. Registered Capital & Paid-up Capital
+    cap_text = " ".join([c["text"] for c in retrieved_doc_contexts.get("capital", [])]) + " " + raw_text
+    m_cap = re.search(r"(?i)\bcapital\b[^\n.]{0,80}?(?:is\s*)?(?:birr|etb)?\s*(\d{1,3}(?:,\d{3})+|\d{4,})", cap_text)
+    if not m_cap:
+        m_cap = re.search(r"(?i)\b(\d{1,3}(?:,\d{3})+|\d{4,})\s*(?:birr|etb)\s*capital\b", cap_text)
+    if m_cap:
+        raw_val = m_cap.group(1).replace(",", "")
+        val_cap = int(raw_val)
+        prolog_facts["company_capital"] = val_cap
+        if comp_type == "share_company":
+            prolog_facts["share_company_capital"] = val_cap
+        else:
+            prolog_facts["plc_capital"] = val_cap
+        fact_provenance["company_capital"] = {
+            "value": val_cap,
+            "source_text": m_cap.group(0),
+            "article_reference": "Article 247(1)" if comp_type == "share_company" else "Article 496(1)"
+        }
+
+    # 3. Share Par Value
+    m_par = re.search(r"(?i)\bpar\s+value\b[^\n.]{0,50}?(?:is\s*)?(?:birr|etb)?\s*(\d+)", full_lower)
+    if not m_par:
+        m_par = re.search(r"(?i)\b(\d+)\s*(?:birr|etb)\s*per\s+share\b", full_lower)
+    if m_par:
+        par_val = int(m_par.group(1))
+        prolog_facts["share_par_value"] = par_val
+        fact_provenance["share_par_value"] = {
+            "value": par_val,
+            "source_text": m_par.group(0),
+            "article_reference": "Article 247(2) & 496(2)"
+        }
+
+    # 4. Founders / Members Count
+    if comp_type == "share_company":
+        m_founders = re.search(r"(?i)\bestablished\s+by\s+(\d+)\s*founders\b", full_lower)
+        if not m_founders:
+            m_founders = re.search(r"(?i)\b(\d+)\s*(?:founders|subscribers)\b", full_lower)
+        if m_founders:
+            f_count = int(m_founders.group(1))
+            prolog_facts["founders_count"] = f_count
+            fact_provenance["founders_count"] = {
+                "value": f_count,
+                "source_text": m_founders.group(0),
+                "article_reference": "Article 252(2)"
+            }
+    else:
+        m_members = re.search(r"(?i)\b(\d+)\s*(?:members|shareholders)\b", full_lower)
+        if m_members:
+            m_count = int(m_members.group(1))
+            prolog_facts["plc_members_count"] = m_count
+            fact_provenance["plc_members_count"] = {
+                "value": m_count,
+                "source_text": m_members.group(0),
+                "article_reference": "Article 495(4)"
+            }
+
+    # 5. Paid-Up Capital Percentage
+    if "100%" in full_lower or "fully paid up" in full_lower or "fully paid in advance" in full_lower:
+        prolog_facts["paid_up_capital_percent"] = 100
+        fact_provenance["paid_up_capital_percent"] = {
+            "value": 100,
+            "source_text": "Capital specified as 100% fully paid up in advance.",
+            "article_reference": "Articles 254(1) & 499(1)"
+        }
+    else:
+        m_paid = re.search(r"(?i)\bpaid-?up\b[^\n.]{0,40}?(\d+)\s*%", full_lower)
+        if m_paid:
+            paid_pct = int(m_paid.group(1))
+            prolog_facts["paid_up_capital_percent"] = paid_pct
+            fact_provenance["paid_up_capital_percent"] = {
+                "value": paid_pct,
+                "source_text": m_paid.group(0),
+                "article_reference": "Article 254(1)"
+            }
+
+    # 6. Board of Directors Size & Composition
+    m_board = re.search(r"(?i)\bconsisting\s+of\s+(\d+)\s*(?:members|directors)\b", full_lower)
+    if not m_board:
+        m_board = re.search(r"(?i)\bboard\s+of\s+directors\b[^\n.]{0,60}?(\d+)\s*(?:members|directors)\b", full_lower)
+    if not m_board:
+        m_board = re.search(r"(?i)\b(\d+)\s*directors\b", full_lower)
+    if m_board:
+        b_count = int(m_board.group(1))
+        prolog_facts["board_directors_count"] = b_count
+        fact_provenance["board_directors_count"] = {
+            "value": b_count,
+            "source_text": m_board.group(0),
+            "article_reference": "Article 296(1)"
+        }
+
+    m_exec = re.search(r"(?i)\b(\d+)\s*(?:of\s+the\s+directors\s+shall\s+be\s+)?(?:executive|day-to-day|managing)\s*directors\b", full_lower)
+    if m_exec and "board_directors_count" in prolog_facts:
+        exec_cnt = int(m_exec.group(1))
+        total_b = prolog_facts["board_directors_count"]
+        if total_b > 0:
+            exec_pct = (exec_cnt / total_b) * 100.0
+            prolog_facts["executive_directors_percent"] = round(exec_pct, 2)
+            fact_provenance["executive_directors_percent"] = {
+                "value": round(exec_pct, 2),
+                "source_text": f"{exec_cnt} out of {total_b} directors are executive.",
+                "article_reference": "Article 296(1)"
+            }
+
+    m_nonshare = re.search(r"(?i)\b(\d+)\s*(?:of\s+the\s+directors\s+shall\s+be\s+a\s+)?non-shareholder\s*director", full_lower)
+    if m_nonshare and "board_directors_count" in prolog_facts:
+        ns_cnt = int(m_nonshare.group(1))
+        total_b = prolog_facts["board_directors_count"]
+        if total_b > 0:
+            ns_pct = (ns_cnt / total_b) * 100.0
+            prolog_facts["non_shareholder_directors_percent"] = round(ns_pct, 2)
+            fact_provenance["non_shareholder_directors_percent"] = {
+                "value": round(ns_pct, 2),
+                "source_text": f"{ns_cnt} out of {total_b} directors are non-shareholders.",
+                "article_reference": "Article 296(2)"
+            }
+
+    # 7. Unapproved Director Loans & Missing Auditor Reports
+    if "loan to director" in full_lower or "director guarantee" in full_lower or "security for director" in full_lower:
+        if "without general meeting approval" in full_lower or "unapproved" in full_lower or "without prior approval" in full_lower:
+            prolog_facts["has_unapproved_director_loan"] = True
+            fact_provenance["has_unapproved_director_loan"] = {
+                "value": True,
+                "source_text": "Director loan or guarantee provided without prior shareholder general meeting approval.",
+                "article_reference": "Article 307(1)"
+            }
+        if "without auditor report" in full_lower or "no external auditor report" in full_lower or "missing auditor report" in full_lower:
+            prolog_facts["missing_auditor_report_for_director_loan"] = True
+            fact_provenance["missing_auditor_report_for_director_loan"] = {
+                "value": True,
+                "source_text": "Director loan approved without independent external auditor evaluation report.",
+                "article_reference": "Article 307(3)"
+            }
+
+    # 8. Legal Reserve Transfer Percentage
+    m_res = re.search(r"(?i)\blegal\s+reserve\b[^\n.]{0,60}?(\d+)\s*%", full_lower)
+    if m_res:
+        res_rate = int(m_res.group(1))
+        prolog_facts["legal_reserve_transfer_percent"] = res_rate
+        if comp_type == "plc":
+            prolog_facts["plc_legal_reserve_transfer_percent"] = res_rate
+        fact_provenance["legal_reserve_transfer_percent"] = {
+            "value": res_rate,
+            "source_text": m_res.group(0),
+            "article_reference": "Article 434(1) & 528"
+        }
+
+    # 9. Dividends Rules
+    if "fictitious dividend" in full_lower or "dividends without profit" in full_lower or "distributed without net profit" in full_lower:
+        prolog_facts["fictitious_dividend_distributed"] = True
+        fact_provenance["fictitious_dividend_distributed"] = {
+            "value": True,
+            "source_text": "Dividends distributed without verified net profit in approved balance sheet.",
+            "article_reference": "Article 438(1-2)"
+        }
+
+    m_div_del = re.search(r"(?i)\bdividend\s+payment\b[^\n.]{0,50}?(\d+)\s*months?\b", full_lower)
+    if m_div_del:
+        div_m = int(m_div_del.group(1))
+        prolog_facts["dividend_payment_delay_months"] = div_m
+        fact_provenance["dividend_payment_delay_months"] = {
+            "value": div_m,
+            "source_text": m_div_del.group(0),
+            "article_reference": "Article 438(3)"
+        }
+
+    # 10. Single Member PLC Conversion Deadline
+    m_sm = re.search(r"(?i)\bsingle\s+member\b[^\n.]{0,50}?(\d+)\s*months?\b", full_lower)
+    if m_sm:
+        sm_m = int(m_sm.group(1))
+        prolog_facts["single_member_unconverted_months"] = sm_m
+        fact_provenance["single_member_unconverted_months"] = {
+            "value": sm_m,
+            "source_text": m_sm.group(0),
+            "article_reference": "Article 498"
+        }
+
+    # 11. Accounting Record Retention
+    m_rec = re.search(r"(?i)\b(?:books\s+of\s+accounts|accounting\s+records)\b[^\n.]{0,60}?(\d+)\s*years?\b", full_lower)
+    if m_rec:
+        rec_yr = int(m_rec.group(1))
+        prolog_facts["accounting_records_retention_years"] = rec_yr
+        fact_provenance["accounting_records_retention_years"] = {
+            "value": rec_yr,
+            "source_text": m_rec.group(0),
+            "article_reference": "Article 66"
+        }
+
+    # 12. Transferable Securities Issuance by PLC
+    if comp_type == "plc" and ("issues transferable securities" in full_lower or "issuing bonds" in full_lower or "debentures" in full_lower):
+        prolog_facts["issues_transferable_securities"] = True
+        fact_provenance["issues_transferable_securities"] = {
+            "value": True,
+            "source_text": "PLC proposing or issuing transferable securities/bonds.",
+            "article_reference": "Articles 180 & 495(5)"
+        }
+
+    # 13. Contributions in Kind & Valuation
+    if "contribution in kind" in full_lower or "non-cash contribution" in full_lower:
+        prolog_facts["has_contribution_in_kind"] = True
+        fact_provenance["has_contribution_in_kind"] = {
+            "value": True,
+            "source_text": "Non-cash property contribution specified in company formation.",
+            "article_reference": "Article 257"
+        }
+        if "expert valuation report" in full_lower or "independent valuation report" in full_lower:
+            prolog_facts["has_expert_valuation_report"] = True
+            fact_provenance["has_expert_valuation_report"] = {
+                "value": True,
+                "source_text": "Independent expert valuation report attached for in-kind contributions.",
+                "article_reference": "Article 257"
+            }
+
+    # 14. Formation External Audit
+    if "external audit" in full_lower or "audited by external auditor" in full_lower or "auditing formation" in full_lower:
+        prolog_facts["has_external_formation_audit"] = True
+        fact_provenance["has_external_formation_audit"] = {
+            "value": True,
+            "source_text": "Company formation audited by external auditors.",
+            "article_reference": "Article 261"
+        }
+
+    # 15. Ambiguity Flags for Three-Valued Logic
+    if "capital" in full_lower and "company_capital" not in prolog_facts:
+        prolog_facts["has_capital_clause"] = True
+    if "board" in full_lower and "board_directors_count" not in prolog_facts:
+        prolog_facts["has_board_clause"] = True
+    if "reserve" in full_lower and "legal_reserve_transfer_percent" not in prolog_facts:
+        prolog_facts["has_reserve_clause"] = True
+
+    # Assemble retrieved document chunks + matched Commercial Code Articles
+    all_chunks = []
+    for k, chunk_list in retrieved_doc_contexts.items():
+        for chk in chunk_list:
+            if chk.get("similarity", 0) > 0.10:
+                all_chunks.append({
+                    "source": "uploaded_document",
+                    "category": k,
+                    "snippet": chk["text"][:300],
+                    "start_char": chk.get("start_char", 0),
+                    "end_char": chk.get("end_char", 0),
+                    "similarity": round(chk.get("similarity", 0), 4)
+                })
+
+    for k, art_list in retrieved_proclamation_articles.items():
+        for art in art_list:
+            all_chunks.append({
+                "source": "commercial_code_ethiopia_1243_2021",
+                "category": k,
+                "article_number": art.get("article_number"),
+                "article_title": art.get("title"),
+                "context": art.get("context"),
+                "snippet": art.get("text", "")[:350],
+                "similarity": round(art.get("similarity", 0), 4)
+            })
+
+    return {
+        "pii_redacted_count": len(pii_map),
+        "sanitized_preview": sanitized_text[:200] + "...",
+        "prolog_facts": prolog_facts,
+        "fact_provenance": fact_provenance,
+        "retrieved_chunks": all_chunks,
+        "proclamation_metadata": commercial_code_corpus.metadata
+    }
+
+
+def extract_rag_compliance_facts(raw_text: str, domain: str = "auto") -> Dict[str, Any]:
+    """
+    Unified RAG Pipeline Dispatcher for Ethiopian Labour Law & Commercial Code.
+    """
+    dom_clean = (domain or "auto").lower()
+    if dom_clean in ("commercial_code", "commercial_code_ethiopia", "ethiopian_commercial_code"):
+        return extract_commercial_code_compliance_facts(raw_text)
+
+    if dom_clean == "auto":
+        from services.ner import COMMERCIAL_CODE_KEYWORDS_REGEX
+        if COMMERCIAL_CODE_KEYWORDS_REGEX.search(raw_text):
+            return extract_commercial_code_compliance_facts(raw_text)
+
+    return extract_labour_compliance_facts(raw_text)
 

@@ -101,16 +101,78 @@ CLAUSE_PATTERNS = [
     }
 ]
 
+# Ethiopian Commercial Code Proclamation No. 1243/2021 Clause Pattern Matchers
+COMMERCIAL_CLAUSE_PATTERNS = [
+    {
+        "type": "COMMERCIAL_COMPANY_CAPITAL",
+        "regex": r"(?i)\b(registered\s+capital|capital\s+of\s+the\s+company|fixed\s+capital|paid-up\s+capital|initial\s+capital|capital\s+amount|50,000\s+birr|15,000\s+birr)\b",
+        "keywords": ["registered capital", "company capital", "paid-up capital", "Article 247", "Article 496"]
+    },
+    {
+        "type": "COMMERCIAL_SHARE_PAR_VALUE",
+        "regex": r"(?i)\b(par\s+value|nominal\s+value|value\s+of\s+each\s+share|100\s+birr\s+per\s+share|share\s+price)\b",
+        "keywords": ["par value", "nominal value", "Article 247(2)", "Article 496(2)"]
+    },
+    {
+        "type": "COMMERCIAL_BOARD_DIRECTORS",
+        "regex": r"(?i)\b(board\s+of\s+directors|board\s+members|executive\s+directors|non-executive\s+directors|directors\s+count)\b",
+        "keywords": ["board of directors", "directors", "Article 296"]
+    },
+    {
+        "type": "COMMERCIAL_FOUNDERS_MEMBERS",
+        "regex": r"(?i)\b(founders|subscribers|number\s+of\s+members|shareholders\s+count|plc\s+members)\b",
+        "keywords": ["founders", "subscribers", "members", "Article 252", "Article 495"]
+    },
+    {
+        "type": "COMMERCIAL_DIRECTOR_LOANS",
+        "regex": r"(?i)\b(loan\s+to\s+director|director\s+guarantee|security\s+for\ acquisition|auditor\s+report\s+loan)\b",
+        "keywords": ["director loan", "director guarantee", "Article 307"]
+    },
+    {
+        "type": "COMMERCIAL_LEGAL_RESERVE",
+        "regex": r"(?i)\b(legal\s+reserve|reserve\s+fund|5%\s+of\s+net\s+profit|10%\s+of\s+capital|transfers?\s+to\s+reserve)\b",
+        "keywords": ["legal reserve", "reserve fund", "Article 434", "Article 528"]
+    },
+    {
+        "type": "COMMERCIAL_DIVIDENDS",
+        "regex": r"(?i)\b(dividend|fictitious\s+dividend|distribution\s+of\s+profit|net\s+profit\s+dividend|4\s+months\s+payment)\b",
+        "keywords": ["dividends", "fictitious dividend", "Article 438"]
+    },
+    {
+        "type": "COMMERCIAL_RECORD_RETENTION",
+        "regex": r"(?i)\b(accounting\s+records|books\s+of\s+accounts|preserve\s+for\s+10\s+years|financial\s+documents\s+retention)\b",
+        "keywords": ["accounting records", "books of accounts", "10 years", "Article 66"]
+    },
+    {
+        "type": "COMMERCIAL_IN_KIND_VALUATION",
+        "regex": r"(?i)\b(contribution\s+in\s+kind|non-cash\s+contribution|expert\s+valuation\s+report|property\s+valuation)\b",
+        "keywords": ["contribution in kind", "expert valuation", "Article 257"]
+    },
+    {
+        "type": "COMMERCIAL_TRANSFERABLE_SECURITIES",
+        "regex": r"(?i)\b(transferable\s+securities|bonds\s+issuance|debentures|public\s+subscription)\b",
+        "keywords": ["transferable securities", "bonds", "Article 180", "Article 495"]
+    }
+]
+
+# Combined Clause Patterns
+ALL_CLAUSE_PATTERNS = CLAUSE_PATTERNS + COMMERCIAL_CLAUSE_PATTERNS
+
 # State & Jurisdiction pattern rules for Ethiopia
 JURISDICTION_REGEX = re.compile(
     r"(?i)\b(?:governed\s+by\s+(?:the\s+laws\s+of\s+)?|jurisdiction\s+of\s+(?:the\s+courts\s+of\s+)?)"
     r"(Ethiopia|Federal\s+Democratic\s+Republic\s+of\s+Ethiopia|Addis\s+Ababa|Dire\s+Dawa)"
 )
 
+COMMERCIAL_CODE_KEYWORDS_REGEX = re.compile(
+    r"(?i)\b(commercial\s+code|proclamation\s+1243|share\s+company|s\.c\.|private\s+limited\s+company|p\.l\.c\.|plc|memorandum\s+of\s+association|articles\s+of\s+association|board\s+of\s+directors|registered\s+capital|business\s+organization|par\s+value|legal\s+reserve|commercial\s+register)\b"
+)
+
 def detect_suggested_domain_and_jurisdiction(text: str) -> tuple[str, str | None]:
     """
-    Scans document text and sets the suggested compliance domain to ethiopian_labour_proclamation
-    and defaults jurisdiction to Ethiopia / Federal Democratic Republic of Ethiopia.
+    Scans document text and sets the suggested compliance domain:
+    - commercial_code (if commercial code / share company / PLC / corporate bylaws terms detected)
+    - ethiopian_labour_proclamation (default for employment contracts)
     """
     first_500_words = " ".join(text.split()[:500])
 
@@ -119,7 +181,11 @@ def detect_suggested_domain_and_jurisdiction(text: str) -> tuple[str, str | None
     if match:
         detected_jurisdiction = match.group(1).strip()
 
-    suggested_domain = "ethiopian_labour_proclamation"
+    if COMMERCIAL_CODE_KEYWORDS_REGEX.search(text):
+        suggested_domain = "commercial_code"
+    else:
+        suggested_domain = "ethiopian_labour_proclamation"
+
     return suggested_domain, detected_jurisdiction
 
 def extract_entities_and_clauses(text: str) -> Dict[str, Any]:
@@ -185,7 +251,7 @@ def extract_entities_and_clauses(text: str) -> Dict[str, Any]:
         if not para_stripped:
             continue
 
-        for pattern in CLAUSE_PATTERNS:
+        for pattern in ALL_CLAUSE_PATTERNS:
             if re.search(pattern["regex"], para_stripped):
                 clause_type = pattern["type"]
                 clause_key = (para_start, para_end, clause_type)

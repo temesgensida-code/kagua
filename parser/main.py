@@ -23,6 +23,7 @@ class AIExtractRequest(BaseModel):
     model: str
     api_key: str
     proclamation_articles: Optional[List[Dict[str, Any]]] = None
+    domain: Optional[str] = "auto"
 
 # Enable CORS for frontend integration
 app.add_middleware(
@@ -38,12 +39,12 @@ MAX_FILE_SIZE_BYTES = 20 * 1024 * 1024  # 20MB limit
 @app.get("/")
 def read_root():
     return {
-        "service": "Kagua Ethiopian Labour Proclamation Parser & RAG Engine API",
-        "target_legal_framework": proclamation_corpus.metadata,
+        "service": "Kagua Ethiopian Proclamation Legal Parser & RAG Engine API",
+        "supported_domains": ["ethiopian_labour_proclamation", "commercial_code"],
         "status": "online",
         "endpoints": {
-            "parse": "POST /parse (Upload employment contract for Ethiopian Labour Proclamation NER & RAG fact extraction)",
-            "rag_parse": "POST /rag-parse (Dedicated Ethiopian Labour Proclamation RAG fact extractor)",
+            "parse": "POST /parse (Upload document for Ethiopian Labour or Commercial Code NER & RAG fact extraction)",
+            "rag_parse": "POST /rag-parse (Dedicated RAG fact extractor with domain auto-detection)",
             "ai_extract": "POST /ai-extract (LLM compliance fact extraction via Grok, Gemini, or GPT)"
         }
     }
@@ -53,16 +54,19 @@ def health_check():
     return {"status": "ok", "timestamp": time.time()}
 
 @app.post("/parse")
-async def parse_document(file: UploadFile = File(...)):
+async def parse_document(
+    file: UploadFile = File(...),
+    domain: Optional[str] = "auto"
+):
     """
     POST /parse endpoint:
     1. Streams file into RAM (0 disk writes).
     2. Extracts raw text with pypdf / python-docx.
-    3. Runs spaCy NER & Ethiopian Labour Proclamation clause matcher.
-    4. Executes Privacy-Preserving Ethiopian Labour Law RAG Pipeline:
+    3. Runs spaCy NER & Legal Proclamation clause matcher.
+    4. Executes Privacy-Preserving Ethiopian Legal RAG Pipeline (Labour / Commercial Code):
        - De-identifies sensitive user PII.
-       - Retrieves matched Articles from parser/jsons/labour_proclamation_1156_2019.json.
-       - Synthesizes structured Ethiopian Labour Law Prolog facts for reasoning.
+       - Retrieves matched Articles from legal JSON corpora.
+       - Synthesizes structured Prolog facts for reasoning.
     """
     if not file or not file.filename:
         raise HTTPException(
@@ -99,13 +103,18 @@ async def parse_document(file: UploadFile = File(...)):
             detail="Could not extract readable text from document."
         )
 
-    # 2. Run spaCy NER & Ethiopian Clause Matcher
+    # 2. Run spaCy NER & Clause Matcher
     ner_result = extract_entities_and_clauses(raw_text)
 
-    # 3. Run Privacy-Preserving Ethiopian Labour Law RAG Engine
-    rag_result = extract_rag_compliance_facts(raw_text)
+    # 3. Determine target domain
+    target_domain = domain
+    if not target_domain or target_domain == "auto":
+        target_domain = ner_result["summary"].get("suggested_domain", "ethiopian_labour_proclamation")
 
-    # 4. Construct response payload
+    # 4. Run Privacy-Preserving Legal RAG Engine
+    rag_result = extract_rag_compliance_facts(raw_text, domain=target_domain)
+
+    # 5. Construct response payload
     response_payload = {
         "filename": file.filename,
         "content_type": file.content_type,
@@ -125,10 +134,13 @@ async def parse_document(file: UploadFile = File(...)):
     return JSONResponse(status_code=200, content=response_payload)
 
 @app.post("/rag-parse")
-async def rag_parse_document(file: UploadFile = File(...)):
+async def rag_parse_document(
+    file: UploadFile = File(...),
+    domain: Optional[str] = "auto"
+):
     """
     POST /rag-parse endpoint:
-    Dedicated RAG endpoint returning anonymized text, PII redaction stats, retrieved Ethiopian Labour Proclamation chunks,
+    Dedicated RAG endpoint returning anonymized text, PII redaction stats, retrieved proclamation chunks,
     and structured Prolog facts.
     """
     if not file or not file.filename:
@@ -140,7 +152,7 @@ async def rag_parse_document(file: UploadFile = File(...)):
         raise HTTPException(status_code=422, detail="Empty or unreadable document.")
 
     sanitized_text, pii_map = anonymize_text(raw_text)
-    rag_result = extract_rag_compliance_facts(raw_text)
+    rag_result = extract_rag_compliance_facts(raw_text, domain=domain)
 
     return JSONResponse(status_code=200, content={
         "filename": file.filename,
@@ -156,7 +168,7 @@ async def rag_parse_document(file: UploadFile = File(...)):
 async def ai_extract_facts(req: AIExtractRequest):
     """
     POST /ai-extract endpoint:
-    Proxies anonymized contract text + Ethiopian Labour Law context to LLM provider (Grok, Gemini, or GPT),
+    Proxies anonymized contract text + Proclamation context to LLM provider (Grok, Gemini, or GPT),
     returning structured compliance facts and reasoning for Prolog truth checking.
     """
     try:
@@ -165,7 +177,8 @@ async def ai_extract_facts(req: AIExtractRequest):
             model=req.model,
             api_key=req.api_key,
             anonymized_text=req.anonymized_text,
-            proclamation_articles=req.proclamation_articles
+            proclamation_articles=req.proclamation_articles,
+            domain=req.domain
         )
         return JSONResponse(status_code=200, content=res)
     except Exception as e:
