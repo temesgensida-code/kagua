@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { SAMPLE_DOCS, type SampleDoc } from "$lib/data/sampleDocs";
   import type { ProgressEvent } from "$lib/services/api";
   import { soundState } from '$lib/services/sound.svelte';
+  import { Download } from '@lucide/svelte';
 
   interface Props {
     isScanning: boolean;
     progressEvents: ProgressEvent[];
     currentStageMessage: string;
+    selectedDomain?: string;
     onFileSelected: (
       fileData: Blob | File,
       filename: string,
       sampleContent?: string,
+      sampleDomain?: string
     ) => void;
   }
 
@@ -18,6 +20,7 @@
     isScanning = false,
     progressEvents = [],
     currentStageMessage = "",
+    selectedDomain = "auto",
     onFileSelected,
   }: Props = $props();
 
@@ -56,13 +59,6 @@
   function triggerBrowse() {
     soundState.playBrowse();
     fileInput?.click();
-  }
-
-  function selectSample(sample: SampleDoc) {
-    soundState.playClick();
-    const txtFilename = sample.filename.replace(/\.(pdf|docx)$/i, '.txt');
-    const blob = new Blob([sample.content], { type: "text/plain" });
-    onFileSelected(blob, txtFilename, sample.content);
   }
 </script>
 
@@ -152,21 +148,19 @@
     </div>
   </div>
 
-  <!-- Quick Test Sample Bar -->
-  <div class="samples-bar">
-    <span class="samples-label">TRY WITH SAMPLE DOCS:</span>
-    <div class="samples-list">
-      {#each SAMPLE_DOCS as sample}
-        <button
-          type="button"
-          class="sample-btn"
-          onclick={() => selectSample(sample)}
-        >
-          <span class="sample-ext">{sample.type}</span>
-          <span class="sample-name">{sample.filename}</span>
-        </button>
-      {/each}
-    </div>
+  <!-- Sample PDF Download Bar -->
+  <div class="sample-download-bar">
+    <a
+      href="/fictional_vacancy_30pages.pdf"
+      download="fictional_vacancy_30pages.pdf"
+      class="sample-download-btn"
+      onclick={() => soundState.playClick()}
+      title="Download sample PDF document (30 pages) to test compliance analysis"
+    >
+      <Download size={15} />
+      <span class="sample-dl-text">Sample PDF file to test with</span>
+      <span class="sample-dl-badge">PDF &bull; 30 PAGES</span>
+    </a>
   </div>
 </div>
 
@@ -177,18 +171,18 @@
     margin: 0 auto;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .dropzone-panel {
     position: relative;
     width: 100%;
-    min-height: 280px;
+    min-height: 270px;
     background: #0d1724;
     background: radial-gradient(circle at center, #111d2e 0%, #0b1420 100%);
     border: 2px dashed #1e434c;
     border-radius: 8px;
-    padding: 2.5rem 1.5rem;
+    padding: 2.2rem 1.5rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -226,15 +220,15 @@
   }
 
   .icon-container {
-    width: 64px;
-    height: 64px;
+    width: 60px;
+    height: 60px;
     background: rgba(19, 46, 53, 0.25);
     border: 1px solid #1e434c;
     border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
     transition:
       transform 0.3s ease,
       border-color 0.3s ease;
@@ -246,26 +240,26 @@
   }
 
   .doc-icon {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
   }
 
   .drop-title {
     font-family: var(--font-title);
-    font-size: 1.15rem;
+    font-size: 1.1rem;
     font-weight: 700;
     letter-spacing: 2.5px;
     color: #ffffff;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
   }
 
   .file-specs {
     font-family: var(--font-mono);
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     font-weight: 500;
     letter-spacing: 1.5px;
     color: var(--text-muted);
-    margin-bottom: 1.75rem;
+    margin-bottom: 1.5rem;
   }
 
   .btn-browse {
@@ -277,7 +271,7 @@
     background: #132E35;
     border: 1px solid #1e434c;
     border-radius: 4px;
-    padding: 12px 34px;
+    padding: 11px 32px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
@@ -379,63 +373,51 @@
     color: var(--text-muted);
   }
 
-  .samples-bar {
+  /* Sample Download Bar */
+  .sample-download-bar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0.5rem 0.25rem;
-    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0.35rem 0.25rem;
   }
 
-  .samples-label {
-    font-family: var(--font-mono);
-    font-size: 0.65rem;
-    letter-spacing: 1.5px;
-    color: #4a5d6e;
-    font-weight: 600;
-  }
-
-  .samples-list {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .sample-btn {
+  .sample-download-btn {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px 10px;
-    background: rgba(14, 25, 38, 0.8);
-    border: 1px solid rgba(0, 240, 255, 0.15);
-    border-radius: 4px;
-    color: var(--text-muted);
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .sample-btn:hover {
-    border-color: var(--cyan-primary);
+    gap: 8px;
+    padding: 8px 18px;
+    background: rgba(14, 25, 38, 0.85);
+    border: 1px solid rgba(0, 240, 255, 0.25);
+    border-radius: 6px;
     color: var(--cyan-primary);
-    background: rgba(0, 240, 255, 0.08);
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 
-  .sample-ext {
-    font-weight: 700;
-    color: var(--cyan-muted);
-    font-size: 0.6rem;
-    padding: 1px 4px;
+  .sample-download-btn:hover {
     background: rgba(0, 240, 255, 0.12);
-    border-radius: 2px;
+    border-color: var(--cyan-primary);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 240, 255, 0.2);
   }
 
-  .sample-name {
-    text-overflow: ellipsis;
-    overflow: hidden;
-    white-space: nowrap;
-    max-width: 180px;
+  .sample-dl-text {
+    letter-spacing: 0.5px;
+  }
+
+  .sample-dl-badge {
+    font-size: 0.58rem;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background: rgba(0, 240, 255, 0.15);
+    color: var(--cyan-primary);
+    letter-spacing: 0.5px;
   }
 
   /* ─── Light Mode Overrides ─── */
@@ -477,27 +459,22 @@
     border-color: #69818d;
   }
 
-  :global([data-theme="light"]) .samples-bar {
-    background: rgba(194, 198, 202, 0.8);
-    border-color: #8a9aa8;
+  :global([data-theme="light"]) .sample-download-btn {
+    background: #69818d;
+    border: 1px solid #8a9aa8;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
-  :global([data-theme="light"]) .samples-label {
-    color: #5a6a78;
+  :global([data-theme="light"]) .sample-download-btn:hover {
+    background: #5a7380;
+    border-color: #69818d;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
-  :global([data-theme="light"]) .sample-btn {
-    color: #5a6a78;
-    border-color: #8a9aa8;
-  }
-
-  :global([data-theme="light"]) .sample-btn:hover {
-    color: #2d3a45;
-    background: rgba(105, 129, 141, 0.1);
-  }
-
-  :global([data-theme="light"]) .sample-ext {
-    color: #69818d;
-    background: rgba(105, 129, 141, 0.15);
+  :global([data-theme="light"]) .sample-dl-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: #ffffff;
   }
 </style>
