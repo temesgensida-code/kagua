@@ -66,16 +66,21 @@ async fn main() {
         ws_state: ws_state.clone(),
     };
 
-    let frontend_origin: HeaderValue = std::env::var("FRONTEND_URL")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string())
-        .parse()
-        .expect("Invalid FRONTEND_URL");
-
-    let cors = CorsLayer::new()
-        .allow_origin(frontend_origin)
-        .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
-        .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
-        .allow_credentials(true);
+    let cors = if let Ok(frontend_url_str) = std::env::var("FRONTEND_URL") {
+        if frontend_url_str == "*" {
+            CorsLayer::permissive()
+        } else if let Ok(origin) = frontend_url_str.parse::<HeaderValue>() {
+            CorsLayer::new()
+                .allow_origin(origin)
+                .allow_methods([Method::GET, Method::POST, Method::OPTIONS])
+                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::ACCEPT])
+                .allow_credentials(true)
+        } else {
+            CorsLayer::permissive()
+        }
+    } else {
+        CorsLayer::permissive()
+    };
 
     // ── Auth routes (public) ──────────────────────────────────────────────
     let auth_router = Router::new()

@@ -180,7 +180,7 @@ violation_to_json(V, Json) :-
 %% ============================================================================
 
 start_server :-
-    ( getenv('REASONER_PORT', PortStr)
+    ( (getenv('PORT', PortStr) ; getenv('REASONER_PORT', PortStr))
     -> atom_number(PortStr, Port)
     ;  Port = 8081
     ),

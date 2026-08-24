@@ -60,8 +60,9 @@ export interface AIConfigParams {
 
 import { authStore } from './authStore.svelte';
 
-const API_BASE = 'http://127.0.0.1:8080';
-const WS_BASE = 'ws://127.0.0.1:8080/ws';
+const RAW_API_BASE = (import.meta.env.VITE_PUBLIC_API_URL as string) || 'http://127.0.0.1:8080';
+const API_BASE = RAW_API_BASE.replace(/\/$/, '');
+const WS_BASE = API_BASE.replace(/^http/, 'ws') + '/ws';
 
 function authHeaders(): HeadersInit {
   const token = authStore.accessToken;
