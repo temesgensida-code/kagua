@@ -7,6 +7,7 @@
   import { aiSettings } from '$lib/services/aiSettings.svelte';
 
   let frameworks = $state<Framework[]>(INITIAL_FRAMEWORKS);
+  let selectedDomain = $state<string>('auto');
   let isScanning = $state(false);
   let currentStageMessage = $state('');
   let progressEvents = $state<ProgressEvent[]>([]);
@@ -19,12 +20,32 @@
     );
   }
 
-  async function handleFileSelected(fileData: Blob | File, filename: string, sampleContent?: string) {
+  function toggleDomainFrameworks(domainGroup: 'labour' | 'commercial') {
+    const domainItems = frameworks.filter(fw => fw.domain === domainGroup);
+    const anyActive = domainItems.some(fw => fw.active);
+    const nextState = !anyActive;
+
+    frameworks = frameworks.map(fw =>
+      fw.domain === domainGroup ? { ...fw, active: nextState } : fw
+    );
+  }
+
+  async function handleFileSelected(
+    fileData: Blob | File,
+    filename: string,
+    sampleContent?: string,
+    sampleDomain?: string
+  ) {
     const sizeMB = (fileData.size / (1024 * 1024)).toFixed(2) + ' MB';
     const ext = filename.split('.').pop()?.toUpperCase() || 'DOC';
 
     // Clear any previous analysis report state
     report = undefined;
+
+    const targetDomain = sampleDomain || selectedDomain;
+    if (sampleDomain) {
+      selectedDomain = sampleDomain;
+    }
 
     selectedFile = {
       name: filename,
@@ -45,8 +66,8 @@
     });
 
     try {
-      // Post document stream to Rust Axum /analyze endpoint with AI settings
-      const resultReport = await analyzeDocument(fileData, filename, 'auto', {
+      // Post document stream to Rust Axum /analyze endpoint with AI settings and chosen domain
+      const resultReport = await analyzeDocument(fileData, filename, targetDomain, {
         enabled: aiSettings.enabled,
         provider: aiSettings.provider,
         model: aiSettings.selectedModelId,
@@ -82,7 +103,10 @@
 <div class="page-container">
   <HeaderSection
     {frameworks}
+    {selectedDomain}
+    onSelectDomain={(d) => selectedDomain = d}
     onToggleFramework={toggleFramework}
+    onToggleDomainFrameworks={toggleDomainFrameworks}
   />
 
   {#if !selectedFile || isScanning}
@@ -90,6 +114,7 @@
       {isScanning}
       {progressEvents}
       {currentStageMessage}
+      {selectedDomain}
       onFileSelected={handleFileSelected}
     />
   {:else}
