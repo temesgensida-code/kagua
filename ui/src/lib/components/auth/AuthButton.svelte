@@ -88,6 +88,37 @@
     box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
   }
 
+  /* ─── Light Mode Overrides (Same style as Browse/Upload File button) ─── */
+  :global([data-theme="light"]) .auth-btn--primary {
+    background: #69818d;
+    border: 1px solid #8a9aa8;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(105, 129, 141, 0.25);
+  }
+
+  :global([data-theme="light"]) .auth-btn--primary:not(:disabled):hover {
+    background: #5a7380;
+    border-color: #69818d;
+    box-shadow: 0 6px 16px rgba(90, 115, 128, 0.35);
+  }
+
+  :global([data-theme="light"]) .auth-btn--secondary {
+    background: #c2c6ca;
+    border: 1px solid #8a9aa8;
+    color: #2d3a45;
+  }
+
+  :global([data-theme="light"]) .auth-btn--secondary:not(:disabled):hover {
+    background: #afb3b7;
+    border-color: #69818d;
+    color: #0f172a;
+  }
+
+  :global([data-theme="light"]) .btn-spinner {
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #ffffff;
+  }
+
   .btn-spinner {
     width: 14px;
     height: 14px;

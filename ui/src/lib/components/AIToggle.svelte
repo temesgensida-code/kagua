@@ -41,7 +41,7 @@
     }}
     title="AI & Compliance Settings"
   >
-    <Settings size={14} />
+    <Settings size={15} />
   </button>
 </div>
 
@@ -50,27 +50,31 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    height: 34px;
   }
 
   .ai-toggle-btn {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
-    background: rgba(13, 23, 36, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
+    height: 34px;
+    padding: 0 10px;
+    background: rgba(13, 23, 36, 0.95);
+    border: 1px solid #132e35;
+    border-radius: 6px;
     color: var(--text-muted);
     font-family: var(--font-mono);
     font-size: 0.72rem;
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
     user-select: none;
+    box-sizing: border-box;
   }
 
   .ai-toggle-btn:hover {
-    border-color: rgba(0, 240, 255, 0.4);
+    border-color: #1e434c;
     color: var(--text-main);
   }
 
@@ -96,8 +100,8 @@
   .ai-status-badge {
     font-size: 0.6rem;
     font-weight: 800;
-    padding: 1px 5px;
-    border-radius: 2px;
+    padding: 2px 5px;
+    border-radius: 3px;
     background: rgba(255, 255, 255, 0.1);
     color: var(--text-muted);
   }
@@ -111,33 +115,42 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 6px;
-    background: rgba(13, 23, 36, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
+    height: 34px;
+    width: 34px;
+    padding: 0;
+    background: rgba(13, 23, 36, 0.95);
+    border: 1px solid #132e35;
+    border-radius: 6px;
     color: var(--text-muted);
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
   }
 
   .settings-btn:hover {
-    border-color: var(--cyan-primary);
-    color: var(--cyan-primary);
-    transform: rotate(30deg);
+    border-color: #1e434c;
+    color: var(--text-main);
   }
 
-  /* Light Theme Overrides */
+  /* ─── Light Mode Overrides ─── */
   :global([data-theme="light"]) .ai-toggle-btn {
-    background: #c2c6ca;
-    border-color: #a0a6ac;
-    color: #5a6a78;
+    background: rgba(175, 179, 183, 0.95);
+    border-color: #99a3ab;
+    color: #556c80;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  :global([data-theme="light"]) .ai-toggle-btn:hover {
+    border-color: #69818d;
+    color: #2d3a45;
   }
 
   :global([data-theme="light"]) .ai-toggle-btn.active {
     background: #69818d;
-    border-color: #4a5a68;
+    border-color: #556c80;
     color: #ffffff;
-    box-shadow: none;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
   }
 
   :global([data-theme="light"]) .ai-toggle-btn.active .ai-status-badge {
@@ -146,8 +159,15 @@
   }
 
   :global([data-theme="light"]) .settings-btn {
-    background: #c2c6ca;
-    border-color: #a0a6ac;
-    color: #5a6a78;
+    background: rgba(175, 179, 183, 0.95);
+    border-color: #99a3ab;
+    color: #556c80;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  }
+
+  :global([data-theme="light"]) .settings-btn:hover {
+    border-color: #69818d;
+    color: #ffffff;
+    background: #69818d;
   }
 </style>

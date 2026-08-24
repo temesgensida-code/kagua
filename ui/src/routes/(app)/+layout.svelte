@@ -96,4 +96,21 @@
     color: var(--pink-accent);
     border-color: var(--pink-accent);
   }
+
+  /* ─── Light Mode Overrides (Same style as Browse/Upload File button) ─── */
+  :global([data-theme="light"]) .logout-btn {
+    background: #69818d;
+    border: 1px solid #8a9aa8;
+    color: #ffffff;
+  }
+
+  :global([data-theme="light"]) .logout-btn:hover {
+    background: #5a7380;
+    border-color: #69818d;
+    color: #ffffff;
+  }
+
+  :global([data-theme="light"]) .session-email {
+    color: #5a6a78;
+  }
 </style>
