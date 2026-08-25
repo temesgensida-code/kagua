@@ -168,11 +168,12 @@ COMMERCIAL_CODE_KEYWORDS_REGEX = re.compile(
     r"(?i)\b(commercial\s+code|proclamation\s+1243|share\s+company|s\.c\.|private\s+limited\s+company|p\.l\.c\.|plc|memorandum\s+of\s+association|articles\s+of\s+association|board\s+of\s+directors|registered\s+capital|business\s+organization|par\s+value|legal\s+reserve|commercial\s+register)\b"
 )
 
-def detect_suggested_domain_and_jurisdiction(text: str) -> tuple[str, str | None]:
+def detect_suggested_domain_and_jurisdiction(text: str, clauses: List[ClauseSpan] = None) -> tuple[str, str | None]:
     """
-    Scans document text and sets the suggested compliance domain:
-    - commercial_code (if commercial code / share company / PLC / corporate bylaws terms detected)
-    - ethiopian_labour_proclamation (default for employment contracts)
+    Scans document text and detected clauses to accurately assign compliance domain:
+    - ethiopian_labour_proclamation (if employment/vacancy clauses dominate)
+    - commercial_code (if corporate bylaws/share company/PLC formation terms dominate)
+    - all (if both employment policies and commercial corporate governance clauses are present)
     """
     first_500_words = " ".join(text.split()[:500])
 
@@ -181,12 +182,40 @@ def detect_suggested_domain_and_jurisdiction(text: str) -> tuple[str, str | None
     if match:
         detected_jurisdiction = match.group(1).strip()
 
-    if COMMERCIAL_CODE_KEYWORDS_REGEX.search(text):
+    labour_clause_count = 0
+    commercial_clause_count = 0
+
+    if clauses:
+        for c in clauses:
+            if c.clause_type.startswith("ETHIOPIAN_"):
+                labour_clause_count += 1
+            elif c.clause_type.startswith("COMMERCIAL_"):
+                commercial_clause_count += 1
+
+    # Check for strong employment indicators
+    has_strong_labour_terms = bool(re.search(
+        r"(?i)\b(working\s+hours|overtime|annual\s+leave|maternity\s+leave|probation|sick\s+leave|severance|notice\s+period|vacancy|employee|worker|salary|wages|job\s+description)\b",
+        text
+    ))
+
+    # Check for strong commercial indicators (e.g. articles of association, share par value, board of directors)
+    has_strong_commercial_terms = bool(re.search(
+        r"(?i)\b(articles\s+of\s+association|memorandum\s+of\s+association|subscribed\s+capital|share\s+par\s+value|legal\s+reserve|fictitious\s+dividend)\b",
+        text
+    ))
+
+    if labour_clause_count > 0 or has_strong_labour_terms:
+        if commercial_clause_count > 0 and has_strong_commercial_terms:
+            suggested_domain = "all"
+        else:
+            suggested_domain = "ethiopian_labour_proclamation"
+    elif commercial_clause_count > 0 or has_strong_commercial_terms:
         suggested_domain = "commercial_code"
     else:
         suggested_domain = "ethiopian_labour_proclamation"
 
     return suggested_domain, detected_jurisdiction
+
 
 def extract_entities_and_clauses(text: str) -> Dict[str, Any]:
     """Run spaCy NER pipeline and Ethiopian Labour Proclamation clause matchers on raw text."""
@@ -282,7 +311,7 @@ def extract_entities_and_clauses(text: str) -> Dict[str, Any]:
     filtered_entities.sort(key=lambda x: x.start_char)
     clauses.sort(key=lambda x: x.start_char)
 
-    suggested_domain, detected_jurisdiction = detect_suggested_domain_and_jurisdiction(text)
+    suggested_domain, detected_jurisdiction = detect_suggested_domain_and_jurisdiction(text, clauses=clauses)
 
     jurisdictions_set = sorted(list(set(e.text for e in filtered_entities if e.label == "JURISDICTION")))
     if detected_jurisdiction and detected_jurisdiction not in jurisdictions_set:

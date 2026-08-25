@@ -103,15 +103,19 @@ pub async fn process_analysis_pipeline(
     let suggested_domain = parser_response.summary.suggested_domain.clone();
     let detected_jurisdiction = parser_response.summary.detected_jurisdiction.clone();
 
-    // Determine active legal domain (Labour Law vs Commercial Code)
-    let active_domain = if domain_requested != "auto" && domain_requested != "all" {
+    // Determine active legal domain (Labour Law vs Commercial Code vs All)
+    let active_domain = if domain_requested == "all" {
+        "all".to_string()
+    } else if domain_requested != "auto" {
         if domain_requested.contains("commercial") {
             "commercial_code".to_string()
         } else {
             "ethiopian_labour_proclamation".to_string()
         }
     } else if let Some(ref sugg) = suggested_domain {
-        if sugg.contains("commercial") {
+        if sugg == "all" {
+            "all".to_string()
+        } else if sugg.contains("commercial") {
             "commercial_code".to_string()
         } else {
             "ethiopian_labour_proclamation".to_string()
@@ -122,11 +126,17 @@ pub async fn process_analysis_pipeline(
 
     let governing_law = if active_domain == "commercial_code" {
         "Ethiopian Commercial Code Proclamation No. 1243/2021"
+    } else if active_domain == "all" {
+        "Ethiopian Labour Proclamation No. 1156/2019 & Commercial Code No. 1243/2021"
     } else {
         "Ethiopian Labour Proclamation No. 1156/2019"
     };
 
-    let final_domain_spec = json!(active_domain);
+    let final_domain_spec = if active_domain == "all" {
+        json!(["ethiopian_labour_proclamation", "commercial_code"])
+    } else {
+        json!(active_domain)
+    };
 
     ws_state.broadcast_progress(
         "DOMAIN_SELECTED",

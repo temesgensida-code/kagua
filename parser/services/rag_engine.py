@@ -1536,15 +1536,55 @@ def extract_commercial_code_compliance_facts(raw_text: str) -> Dict[str, Any]:
 def extract_rag_compliance_facts(raw_text: str, domain: str = "auto") -> Dict[str, Any]:
     """
     Unified RAG Pipeline Dispatcher for Ethiopian Labour Law & Commercial Code.
+    Supports auto domain detection and 'all' merged multi-domain extraction.
     """
     dom_clean = (domain or "auto").lower()
+
     if dom_clean in ("commercial_code", "commercial_code_ethiopia", "ethiopian_commercial_code"):
         return extract_commercial_code_compliance_facts(raw_text)
 
-    if dom_clean == "auto":
-        from services.ner import COMMERCIAL_CODE_KEYWORDS_REGEX
-        if COMMERCIAL_CODE_KEYWORDS_REGEX.search(raw_text):
-            return extract_commercial_code_compliance_facts(raw_text)
+    if dom_clean in ("labour", "ethiopian_labour_proclamation", "employment"):
+        return extract_labour_compliance_facts(raw_text)
 
-    return extract_labour_compliance_facts(raw_text)
+    if dom_clean == "all":
+        labour_res = extract_labour_compliance_facts(raw_text)
+        comm_res = extract_commercial_code_compliance_facts(raw_text)
+        merged_facts = {**labour_res["prolog_facts"], **comm_res["prolog_facts"]}
+        merged_facts["domain"] = "all"
+        merged_provenance = {**labour_res.get("fact_provenance", {}), **comm_res.get("fact_provenance", {})}
+        merged_chunks = labour_res.get("retrieved_chunks", []) + comm_res.get("retrieved_chunks", [])
+        return {
+            "pii_redacted_count": max(labour_res["pii_redacted_count"], comm_res["pii_redacted_count"]),
+            "sanitized_preview": labour_res["sanitized_preview"],
+            "prolog_facts": merged_facts,
+            "fact_provenance": merged_provenance,
+            "retrieved_chunks": merged_chunks,
+            "proclamation_metadata": labour_res["proclamation_metadata"]
+        }
+
+    # Auto mode: Use smart clause-weighted domain detection
+    from services.ner import extract_entities_and_clauses
+    ner_res = extract_entities_and_clauses(raw_text)
+    suggested = ner_res["summary"].get("suggested_domain", "ethiopian_labour_proclamation")
+
+    if suggested == "commercial_code":
+        return extract_commercial_code_compliance_facts(raw_text)
+    elif suggested == "all":
+        labour_res = extract_labour_compliance_facts(raw_text)
+        comm_res = extract_commercial_code_compliance_facts(raw_text)
+        merged_facts = {**labour_res["prolog_facts"], **comm_res["prolog_facts"]}
+        merged_facts["domain"] = "all"
+        merged_provenance = {**labour_res.get("fact_provenance", {}), **comm_res.get("fact_provenance", {})}
+        merged_chunks = labour_res.get("retrieved_chunks", []) + comm_res.get("retrieved_chunks", [])
+        return {
+            "pii_redacted_count": max(labour_res["pii_redacted_count"], comm_res["pii_redacted_count"]),
+            "sanitized_preview": labour_res["sanitized_preview"],
+            "prolog_facts": merged_facts,
+            "fact_provenance": merged_provenance,
+            "retrieved_chunks": merged_chunks,
+            "proclamation_metadata": labour_res["proclamation_metadata"]
+        }
+    else:
+        return extract_labour_compliance_facts(raw_text)
+
 
