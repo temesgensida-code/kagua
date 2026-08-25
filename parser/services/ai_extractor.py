@@ -84,21 +84,62 @@ REQUIRED FACT KEYS (only extract if present or derivable from text):
 CRITICAL RULE: DO NOT HALLUCINATE FACTS. ONLY EXTRACT FACTS SUPPORTED BY THE TEXT. RETURN RAW VALID JSON ONLY."""
 
 
+def normalize_fact_value(val: Any) -> Any:
+    """Coerce stringified numbers or booleans into strict native Python types."""
+    if val is None:
+        return None
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val
+    if isinstance(val, str):
+        v_clean = val.strip().lower()
+        if v_clean in ("true", "yes"):
+            return True
+        if v_clean in ("false", "no"):
+            return False
+        # Try pure numeric conversion
+        try:
+            if "." in val:
+                return float(val)
+            return int(val)
+        except ValueError:
+            # Match patterns like "60 days", "8.5 hours", "50,000 ETB"
+            cleaned_str = val.strip().replace(",", "")
+            m = re.match(r"^(\d+(?:\.\d+)?)\s*(?:days?|hours?|months?|years?|etb|birr|%)?$", cleaned_str, re.IGNORECASE)
+            if m:
+                num_str = m.group(1)
+                return float(num_str) if "." in num_str else int(num_str)
+            return val
+    return val
+
+
 def parse_json_response(raw_resp: str) -> Dict[str, Any]:
-    """Clean markdown backticks if present and parse JSON."""
+    """Clean markdown backticks if present, parse JSON, and normalize fact types."""
     clean = raw_resp.strip()
     if clean.startswith("```"):
         clean = re.sub(r"^```(?:json)?\n?", "", clean)
         clean = re.sub(r"\n?```$", "", clean)
         clean = clean.strip()
+    
+    parsed = None
     try:
-        return json.loads(clean)
+        parsed = json.loads(clean)
     except Exception as e:
         # Fallback regex extraction if JSON has trailing text
         m = re.search(r"\{.*\}", clean, re.DOTALL)
         if m:
-            return json.loads(m.group(0))
-        raise ValueError(f"Failed to parse LLM JSON response: {e}")
+            parsed = json.loads(m.group(0))
+        else:
+            raise ValueError(f"Failed to parse LLM JSON response: {e}")
+
+    if isinstance(parsed, dict) and "ai_facts" in parsed and isinstance(parsed["ai_facts"], dict):
+        normalized_facts = {}
+        for k, v in parsed["ai_facts"].items():
+            normalized_facts[k] = normalize_fact_value(v)
+        parsed["ai_facts"] = normalized_facts
+
+    return parsed
 
 
 async def extract_ai_facts_google(

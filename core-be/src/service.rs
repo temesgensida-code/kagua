@@ -196,22 +196,25 @@ pub async fn process_analysis_pipeline(
                             Some(json!({ "ai_facts_count": count, "model": model })),
                         );
 
-                        // Merge AI facts into Prolog facts map
-                        for (k, v) in ai_extraction.ai_facts {
-                            if !v.is_null() {
-                                facts.insert(k, v);
-                            }
-                        }
+                        // Harmonize, validate types, and reconcile conflicts against baseline RAG facts
+                        let harmonized_stats = harmonize_and_validate_facts(&mut facts, &ai_extraction);
 
                         ai_augmented = true;
                         ai_model_used = Some(model.clone());
-                        ai_facts_count = Some(count);
+                        ai_facts_count = Some(harmonized_stats.merged_count);
                         ai_reasoning = Some(ai_extraction.ai_reasoning);
 
                         ws_state.broadcast_progress(
-                            "AI_FACTS_MERGED",
-                            "Successfully merged AI facts with in-memory RAG facts. Sending to Prolog ground-truth verifier...",
-                            None,
+                            "AI_FACTS_HARMONIZED",
+                            &format!(
+                                "Harmonized {} AI facts with RAG facts ({} merged, {} conflicts reconciled, {} low-confidence filtered).",
+                                count, harmonized_stats.merged_count, harmonized_stats.reconciled_count, harmonized_stats.dropped_count
+                            ),
+                            Some(json!({
+                                "merged_count": harmonized_stats.merged_count,
+                                "reconciled_count": harmonized_stats.reconciled_count,
+                                "dropped_count": harmonized_stats.dropped_count
+                            })),
                         );
                     }
                 }
@@ -701,3 +704,101 @@ fn lookup_statutory_citation(
 
     (Some(citation.to_string()), Some(statutory.to_string()))
 }
+
+
+struct HarmonizationResult {
+    merged_count: usize,
+    dropped_count: usize,
+    reconciled_count: usize,
+}
+
+fn coerce_value(v: &Value) -> Option<Value> {
+    match v {
+        Value::Null => None,
+        Value::Bool(b) => Some(Value::Bool(*b)),
+        Value::Number(n) => Some(Value::Number(n.clone())),
+        Value::String(s) => {
+            let s_lower = s.trim().to_lowercase();
+            if s_lower == "true" || s_lower == "yes" {
+                return Some(Value::Bool(true));
+            }
+            if s_lower == "false" || s_lower == "no" {
+                return Some(Value::Bool(false));
+            }
+            // Parse number
+            if let Ok(num) = s.trim().parse::<i64>() {
+                return Some(json!(num));
+            }
+            if let Ok(num) = s.trim().parse::<f64>() {
+                return Some(json!(num));
+            }
+            // Strip unit suffix like "60 days", "8.5 hours"
+            let cleaned = s.replace(",", "");
+            let parts: Vec<&str> = cleaned.split_whitespace().collect();
+            if let Some(first) = parts.first() {
+                if let Ok(num) = first.parse::<i64>() {
+                    return Some(json!(num));
+                }
+                if let Ok(num) = first.parse::<f64>() {
+                    return Some(json!(num));
+                }
+            }
+            Some(Value::String(s.clone()))
+        }
+        _ => Some(v.clone()),
+    }
+}
+
+fn harmonize_and_validate_facts(
+    facts: &mut Map<String, Value>,
+    ai_extraction: &AIExtractionResponse,
+) -> HarmonizationResult {
+    let mut merged = 0;
+    let mut dropped = 0;
+    let mut reconciled = 0;
+
+    let mut confidence_map = std::collections::HashMap::new();
+    for reasoning in &ai_extraction.ai_reasoning {
+        confidence_map.insert(reasoning.fact_key.clone(), reasoning.confidence);
+    }
+
+    for (k, raw_v) in &ai_extraction.ai_facts {
+        let coerced = match coerce_value(raw_v) {
+            Some(val) => val,
+            None => continue,
+        };
+
+        let confidence = confidence_map.get(k).copied().unwrap_or(0.70);
+
+        // Confidence threshold filtering (< 0.65)
+        if confidence < 0.65 && !facts.contains_key(k) {
+            dropped += 1;
+            continue;
+        }
+
+        if let Some(existing_v) = facts.get(k) {
+            if existing_v == &coerced {
+                merged += 1;
+            } else {
+                // Conflict resolution: AI takes precedence only if high confidence (>= 0.85)
+                if confidence >= 0.85 {
+                    facts.insert(k.clone(), coerced);
+                    reconciled += 1;
+                    merged += 1;
+                } else {
+                    reconciled += 1;
+                }
+            }
+        } else {
+            facts.insert(k.clone(), coerced);
+            merged += 1;
+        }
+    }
+
+    HarmonizationResult {
+        merged_count: merged,
+        dropped_count: dropped,
+        reconciled_count: reconciled,
+    }
+}
+

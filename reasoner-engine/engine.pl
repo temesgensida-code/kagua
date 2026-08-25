@@ -85,19 +85,33 @@ load_domains([D|Ds]) :-
 
 %% assert_facts(+FactList)
 %% Accepts a list of Key-Value pairs and asserts them as doc_fact/2
-%% into the user module so all domain rule modules can see them.
+%% into the user module with type normalization (converting numeric/boolean strings to Prolog terms).
 assert_facts([]).
 assert_facts([Key-Value | Rest]) :-
     !,
-    assert(user:doc_fact(Key, Value)),
+    assert_typed_fact(Key, Value),
     assert_facts(Rest).
 assert_facts([Key=Value | Rest]) :-
     !,
-    assert(user:doc_fact(Key, Value)),
+    assert_typed_fact(Key, Value),
     assert_facts(Rest).
 assert_facts([_ | Rest]) :-
     %% Skip malformed entries
     assert_facts(Rest).
+
+assert_typed_fact(Key, Value) :-
+    normalize_fact(Value, TypedValue),
+    assert(user:doc_fact(Key, TypedValue)).
+
+normalize_fact(Val, Typed) :-
+    string(Val),
+    atom_string(AtomVal, Val),
+    ( atom_number(AtomVal, Num) -> Typed = Num
+    ; AtomVal == true -> Typed = true
+    ; AtomVal == false -> Typed = false
+    ; Typed = AtomVal
+    ), !.
+normalize_fact(Val, Val).
 
 %% retract_all_facts/0
 %% Cleans up all dynamically asserted doc_fact/2 predicates.
