@@ -9,10 +9,6 @@ use crate::models::{
 use crate::secure_buffer::{SecureBuffer, SecureString};
 use crate::ws::WsState;
 
-const FASTAPI_PARSE_URL: &str = "http://127.0.0.1:8000/parse";
-const FASTAPI_AI_EXTRACT_URL: &str = "http://127.0.0.1:8000/ai-extract";
-const PROLOG_REASON_URL: &str = "http://127.0.0.1:8081/reason";
-
 pub async fn process_analysis_pipeline(
     filename: String,
     content_type: Option<String>,
@@ -21,6 +17,18 @@ pub async fn process_analysis_pipeline(
     ai_params: AIParams,
     ws_state: &WsState,
 ) -> Result<AnalysisReport, (axum::http::StatusCode, String)> {
+    let parser_base = std::env::var("PARSER_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+    let parser_base = parser_base.trim_end_matches('/').to_string();
+
+    let reasoner_base = std::env::var("REASONER_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+    let reasoner_base = reasoner_base.trim_end_matches('/').to_string();
+
+    let fastapi_parse_url = format!("{}/parse", parser_base);
+    let fastapi_ai_extract_url = format!("{}/ai-extract", parser_base);
+    let prolog_reason_url = format!("{}/reason", reasoner_base);
+
     let bytes_len = file_bytes.len();
 
     // 1. Wrap raw bytes in SecureBuffer (auto-zeroizes memory when dropped)
@@ -45,9 +53,9 @@ pub async fn process_analysis_pipeline(
     };
 
     let parse_url = if domain_requested != "auto" && domain_requested != "all" {
-        format!("{}?domain={}", FASTAPI_PARSE_URL, domain_requested)
+        format!("{}?domain={}", fastapi_parse_url, domain_requested)
     } else {
-        FASTAPI_PARSE_URL.to_string()
+        fastapi_parse_url.clone()
     };
 
     let client = reqwest::Client::new();
@@ -196,7 +204,7 @@ pub async fn process_analysis_pipeline(
                 "domain": active_domain
             });
 
-            match client.post(FASTAPI_AI_EXTRACT_URL).json(&ai_req_body).send().await {
+            match client.post(&fastapi_ai_extract_url).json(&ai_req_body).send().await {
                 Ok(ai_res) if ai_res.status().is_success() => {
                     if let Ok(ai_extraction) = ai_res.json::<AIExtractionResponse>().await {
                         let count = ai_extraction.ai_facts.len();
@@ -273,7 +281,7 @@ pub async fn process_analysis_pipeline(
     };
 
     let reason_res = client
-        .post(PROLOG_REASON_URL)
+        .post(&prolog_reason_url)
         .json(&reasoner_req)
         .send()
         .await
