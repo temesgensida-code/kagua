@@ -1,5 +1,9 @@
 /**
- * serviceWarmup.ts
+ * serviceWarmup.svelte.ts
+ *
+ * NOTE: This file MUST use the .svelte.ts extension so that the Svelte
+ * compiler processes it and enables Svelte 5 runes ($state, $effect, etc.).
+ * Plain .ts files do not support runes and will throw ReferenceError at runtime.
  *
  * Proactively wakes the Python Parser and SWI-Prolog Reasoner containers on
  * Render Free Tier before the user uploads a document.
@@ -7,7 +11,7 @@
  * Strategy:
  *   - Calls GET /warmup on the Rust backend (which itself pings both services)
  *   - Polls every POLL_INTERVAL_MS, up to MAX_ATTEMPTS times
- *   - Exposes a reactive Svelte 5 $state object for the UI banner
+ *   - Exposes a reactive $state object consumable by Svelte components
  */
 
 const RAW_API_BASE = (import.meta.env.VITE_PUBLIC_API_URL as string) || 'http://127.0.0.1:8080';
@@ -23,11 +27,11 @@ export interface WarmupState {
   attemptCount: number;
 }
 
-const MAX_ATTEMPTS     = 6;          // 6 × 12 s = 72 s max warm-up window
-const POLL_INTERVAL_MS = 12_000;     // 12 seconds between polls
-const REQUEST_TIMEOUT  = 29_000;     // 29 s — just under Render's 30 s boot timeout
+const MAX_ATTEMPTS     = 6;        // 6 × 12 s = 72 s max warm-up window
+const POLL_INTERVAL_MS = 12_000;   // 12 seconds between polls
+const REQUEST_TIMEOUT  = 29_000;   // 29 s — just under Render's 30 s boot timeout
 
-// Reactive state shared with the banner component
+// Reactive state — $state works here because this is a .svelte.ts file
 export const warmupState = $state<WarmupState>({
   status:       'idle',
   parser:       'unknown',

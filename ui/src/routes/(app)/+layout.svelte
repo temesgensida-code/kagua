@@ -4,7 +4,7 @@
   import '../../app.css';
   import { authStore } from '$lib/services/authStore.svelte';
   import { logout, silentRefresh } from '$lib/services/authApi';
-  import { warmupServices, resetWarmup } from '$lib/services/serviceWarmup';
+  import { warmupServices, resetWarmup } from '$lib/services/serviceWarmup.svelte';
   import ServiceWarmupBanner from '$lib/components/ServiceWarmupBanner.svelte';
   import { goto } from '$app/navigation';
 

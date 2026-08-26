@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { warmupState, type WarmupStatus, type ServiceStatus } from '$lib/services/serviceWarmup';
+  import { warmupState, type WarmupStatus, type ServiceStatus } from '$lib/services/serviceWarmup.svelte';
 
   // Auto-dismiss the banner 3 seconds after all services are ready
   let dismissed = $state(false);
