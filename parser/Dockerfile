@@ -20,5 +20,5 @@ COPY . .
 # Expose port 8001
 EXPOSE 8001
 
-# Command to run FastAPI server via uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8001"]
+# Command to run FastAPI server via uvicorn (reads PORT from env, defaults to 8001)
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8001}"]

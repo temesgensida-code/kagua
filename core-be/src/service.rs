@@ -85,11 +85,19 @@ pub async fn process_analysis_pipeline(
         })?;
 
     if !parse_res.status().is_success() {
+        let status_code = parse_res.status();
         let err_text = parse_res.text().await.unwrap_or_default();
-        error!("FastAPI parser error: {}", err_text);
+        error!("FastAPI parser error ({}): {}", status_code, err_text);
+
+        let user_msg = if err_text.contains("<html") || status_code == reqwest::StatusCode::BAD_GATEWAY {
+            "FastAPI parser service is offline or waking up from sleep on Render. Please wait 30 seconds and try again.".to_string()
+        } else {
+            format!("FastAPI document parsing failed: {}", err_text)
+        };
+
         return Err((
             axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-            format!("FastAPI document parsing failed: {}", err_text),
+            user_msg,
         ));
     }
 
@@ -294,11 +302,19 @@ pub async fn process_analysis_pipeline(
         })?;
 
     if !reason_res.status().is_success() {
+        let status_code = reason_res.status();
         let err_text = reason_res.text().await.unwrap_or_default();
-        error!("SWI-Prolog reasoner error: {}", err_text);
+        error!("SWI-Prolog reasoner error ({}): {}", status_code, err_text);
+
+        let user_msg = if err_text.contains("<html") || status_code == reqwest::StatusCode::BAD_GATEWAY {
+            "SWI-Prolog reasoner service is offline or waking up from sleep on Render. Please wait 30 seconds and try again.".to_string()
+        } else {
+            format!("Prolog reasoning failed: {}", err_text)
+        };
+
         return Err((
             axum::http::StatusCode::BAD_REQUEST,
-            format!("Prolog reasoning failed: {}", err_text),
+            user_msg,
         ));
     }
 
