@@ -1,5 +1,5 @@
 <script lang="ts">
-  import favicon from '$lib/assets/favicon.svg';
+  import favicon from '$lib/assets/favicon.png';
   import '../../app.css';
   import { authStore } from '$lib/services/authStore.svelte';
   import { logout } from '$lib/services/authApi';
@@ -14,7 +14,7 @@
 </script>
 
 <svelte:head>
-  <link rel="icon" href={favicon} />
+  <link rel="icon" type="image/png" href={favicon} />
 </svelte:head>
 
 <div class="app-root">

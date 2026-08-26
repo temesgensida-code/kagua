@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#070d18" rx="64"/>
+  <g fill="#ffffff">
+    <!-- Left vertical bar -->
+    <path d="M105 175 h 110 v 295 h -110 z" />
+    <!-- Main checkmark v-shape -->
+    <polygon points="35,175 195,378 475,20 425,20 195,310 120,215" />
+    <!-- Lower right leg of K -->
+    <polygon points="195,378 285,470 380,470 230,315" />
+  </g>
+</svg>
