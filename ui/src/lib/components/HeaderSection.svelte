@@ -68,8 +68,8 @@
     <p class="description">
       Automated zero-persistence compliance engine for employment contracts and
       corporate governance under FDRE Labour Proclamation No. 1156/2019 and
-      Commercial Code Proclamation No. 1243/2021. Powered by spaCy NER, In-Memory
-      RAG, and SWI-Prolog legal reasoning.
+      Commercial Code Proclamation No. 1243/2021. Powered by spaCy NER,
+      In-Memory RAG, and SWI-Prolog legal reasoning.
     </p>
 
     <!-- Domain Master ON/OFF Buttons (Equal Sizing) -->
@@ -135,14 +135,19 @@
         soundState.playClick();
       }}
       aria-expanded={isFrameworksExpanded}
-      title={isFrameworksExpanded ? "Collapse Framework Rules" : "Expand Framework Rules"}
+      title={isFrameworksExpanded
+        ? "Collapse Framework Rules"
+        : "Expand Framework Rules"}
     >
       <div class="frameworks-label">
         <span class="bullet">•</span> FRAMEWORK DOMAIN RULES
         <span class="count">({activeCount}/{frameworks.length} ACTIVE)</span>
       </div>
       <div class="dropdown-trigger">
-        <ChevronDown size={13} class="chevron-icon {isFrameworksExpanded ? 'open' : ''}" />
+        <ChevronDown
+          size={13}
+          class="chevron-icon {isFrameworksExpanded ? 'open' : ''}"
+        />
       </div>
     </button>
 
@@ -426,8 +431,14 @@
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .framework-toggle-btn {
@@ -613,8 +624,8 @@
     .top-header-row {
       flex-direction: column-reverse;
       align-items: stretch;
-      gap: 1rem;
-      margin-bottom: 1.25rem;
+      gap: 2.5rem;
+      margin-bottom: 2.55rem;
     }
 
     .toggle-controls {
