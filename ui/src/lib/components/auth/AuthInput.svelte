@@ -92,4 +92,25 @@
     color: var(--pink-accent);
     margin: 0;
   }
+
+  @media (max-width: 768px) {
+    .auth-field {
+      gap: 0.25rem;
+    }
+
+    .auth-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+    }
+
+    .auth-input {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      border-radius: 6px;
+    }
+
+    .auth-error {
+      font-size: 0.72rem;
+    }
+  }
 </style>

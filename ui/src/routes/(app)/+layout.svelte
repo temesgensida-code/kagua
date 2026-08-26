@@ -89,12 +89,14 @@
     letter-spacing: 0.1em;
     padding: 0.3rem 0.7rem;
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s;
+    transition: color 0.15s, border-color 0.15s, transform 0.15s;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.2);
   }
 
   .logout-btn:hover {
     color: var(--pink-accent);
     border-color: var(--pink-accent);
+    transform: translateY(-1px);
   }
 
   /* ─── Light Mode Overrides (Same style as Browse/Upload File button) ─── */
@@ -102,6 +104,7 @@
     background: #69818d;
     border: 1px solid #8a9aa8;
     color: #ffffff;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
   }
 
   :global([data-theme="light"]) .logout-btn:hover {
@@ -112,5 +115,35 @@
 
   :global([data-theme="light"]) .session-email {
     color: #5a6a78;
+  }
+
+  /* ─── Mobile Responsiveness ─── */
+  @media (max-width: 640px) {
+    .app-root {
+      padding: 0.5rem 0.5rem 1rem 0.5rem;
+    }
+
+    .app-main {
+      padding: 0;
+    }
+
+    .session-bar {
+      padding: 0.25rem 0.25rem 0.5rem;
+      gap: 0.5rem;
+      justify-content: space-between;
+    }
+
+    .session-email {
+      font-size: 0.68rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 200px;
+    }
+
+    .logout-btn {
+      padding: 0.25rem 0.55rem;
+      font-size: 0.6rem;
+    }
   }
 </style>

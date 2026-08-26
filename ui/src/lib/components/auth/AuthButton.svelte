@@ -132,4 +132,18 @@
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+
+  @media (max-width: 768px) {
+    .auth-btn {
+      padding: 0.6rem 1rem;
+      font-size: 0.75rem;
+      letter-spacing: 0.08em;
+      border-radius: 6px;
+    }
+
+    .btn-spinner {
+      width: 12px;
+      height: 12px;
+    }
+  }
 </style>

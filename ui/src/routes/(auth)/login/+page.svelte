@@ -278,4 +278,49 @@
     opacity: 0.8;
     text-decoration: underline;
   }
+
+  @media (max-width: 768px) {
+    .auth-page {
+      gap: 1.25rem;
+      max-width: 100%;
+    }
+
+    .brand-name {
+      font-size: 1.4rem;
+      letter-spacing: 0.12em;
+    }
+
+    .brand-sub {
+      font-size: 0.55rem;
+      letter-spacing: 0.14em;
+    }
+
+    .form-title {
+      font-size: 1.15rem;
+      margin-bottom: 0.2rem;
+    }
+
+    .form-subtitle {
+      font-size: 0.76rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .auth-form {
+      gap: 0.75rem;
+    }
+
+    .login-options {
+      font-size: 0.74rem;
+    }
+
+    .remember-checkbox {
+      width: 12px;
+      height: 12px;
+    }
+
+    .auth-footer {
+      margin-top: 1rem;
+      font-size: 0.78rem;
+    }
+  }
 </style>

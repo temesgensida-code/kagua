@@ -642,4 +642,66 @@
     border-color: #8a9aa8;
   }
 
+  /* ─── Mobile Responsiveness ─── */
+  @media (max-width: 640px) {
+    .viewer-header {
+      padding: 0.5rem 0.75rem;
+      gap: 0.5rem;
+    }
+
+    .title-box {
+      max-width: 100%;
+      overflow: hidden;
+    }
+
+    .doc-filename {
+      font-size: 0.78rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 130px;
+    }
+
+    .char-length {
+      font-size: 0.6rem;
+      padding: 1px 4px;
+    }
+
+    .header-actions {
+      gap: 6px;
+    }
+
+    .pdf-controls {
+      padding: 2px 4px;
+      gap: 4px;
+    }
+
+    .ctrl-btn {
+      padding: 2px 6px;
+      font-size: 0.85rem;
+    }
+
+    .zoom-val {
+      font-size: 0.65rem;
+    }
+
+    .expand-btn {
+      padding: 2px 6px;
+      font-size: 0.62rem;
+    }
+
+    .viewer-content {
+      padding: 0.4rem;
+    }
+
+    :global(.pdf-page-wrapper) {
+      max-width: 100% !important;
+      width: 100% !important;
+    }
+
+    :global(.pdf-canvas) {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+  }
 </style>

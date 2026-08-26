@@ -71,4 +71,19 @@
     min-width: 60px;
     text-align: right;
   }
+
+  @media (max-width: 768px) {
+    .strength-wrap {
+      gap: 0.5rem;
+    }
+
+    .bar {
+      height: 3px;
+    }
+
+    .strength-label {
+      font-size: 0.62rem;
+      min-width: 50px;
+    }
+  }
 </style>

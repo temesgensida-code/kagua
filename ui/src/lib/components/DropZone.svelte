@@ -157,7 +157,7 @@
       onclick={() => soundState.playClick()}
       title="Download sample PDF document (30 pages) to test compliance analysis"
     >
-      <Download size={15} />
+      <Download size={13} />
       <span class="sample-dl-text">Sample PDF file to test with</span>
       <span class="sample-dl-badge">PDF &bull; 30 PAGES</span>
     </a>
@@ -274,6 +274,7 @@
     padding: 11px 32px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   .btn-browse:hover {
@@ -384,26 +385,26 @@
   .sample-download-btn {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 18px;
+    gap: 6px;
+    padding: 5px 12px;
     background: rgba(14, 25, 38, 0.85);
     border: 1px solid rgba(0, 240, 255, 0.25);
-    border-radius: 6px;
+    border-radius: 5px;
     color: var(--cyan-primary);
     font-family: var(--font-mono);
-    font-size: 0.76rem;
+    font-size: 0.68rem;
     font-weight: 600;
     text-decoration: none;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   .sample-download-btn:hover {
     background: rgba(0, 240, 255, 0.12);
     border-color: var(--cyan-primary);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 240, 255, 0.2);
+    box-shadow: 0 4px 8px rgba(0, 240, 255, 0.2);
   }
 
   .sample-dl-text {
@@ -411,9 +412,9 @@
   }
 
   .sample-dl-badge {
-    font-size: 0.58rem;
+    font-size: 0.54rem;
     font-weight: 800;
-    padding: 2px 6px;
+    padding: 1px 5px;
     border-radius: 3px;
     background: rgba(0, 240, 255, 0.15);
     color: var(--cyan-primary);
@@ -452,6 +453,7 @@
     background: #69818d;
     border-color: #8a9aa8;
     color: #ffffff;
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .btn-browse:hover {
@@ -463,18 +465,72 @@
     background: #69818d;
     border: 1px solid #8a9aa8;
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .sample-download-btn:hover {
     background: #5a7380;
     border-color: #69818d;
     color: #ffffff;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
   :global([data-theme="light"]) .sample-dl-badge {
     background: rgba(255, 255, 255, 0.25);
     color: #ffffff;
+  }
+
+  /* ─── Mobile Responsiveness ─── */
+  @media (max-width: 640px) {
+    .dropzone-wrapper {
+      gap: 0.5rem;
+    }
+
+    .dropzone-panel {
+      padding: 1.5rem 1rem;
+      min-height: 220px;
+    }
+
+    .icon-container {
+      width: 48px;
+      height: 48px;
+      margin-bottom: 0.85rem;
+    }
+
+    .doc-icon {
+      width: 24px;
+      height: 24px;
+    }
+
+    .drop-title {
+      font-size: 0.95rem;
+      letter-spacing: 1.5px;
+      line-height: 1.3;
+    }
+
+    .file-specs {
+      font-size: 0.62rem;
+      letter-spacing: 1px;
+      margin-bottom: 1rem;
+    }
+
+    .btn-browse {
+      width: 100%;
+      max-width: 260px;
+      padding: 10px 20px;
+      font-size: 0.8rem;
+    }
+
+    .sample-download-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 4px 10px;
+      font-size: 0.64rem;
+      flex-wrap: wrap;
+    }
+
+    .progress-log {
+      max-width: 100%;
+      padding: 6px 10px;
+    }
   }
 </style>

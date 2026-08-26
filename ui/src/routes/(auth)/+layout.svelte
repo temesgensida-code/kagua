@@ -30,4 +30,10 @@
     padding: 2rem 1rem;
     width: 100%;
   }
+
+  @media (max-width: 768px) {
+    .auth-center {
+      padding: 1rem 0.75rem;
+    }
+  }
 </style>

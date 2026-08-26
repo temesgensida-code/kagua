@@ -5,6 +5,7 @@
   import AIToggle from "./AIToggle.svelte";
   import SettingsModal from "./SettingsModal.svelte";
   import { soundState } from "$lib/services/sound.svelte";
+  import { ChevronDown } from "@lucide/svelte";
 
   interface Props {
     frameworks: Framework[];
@@ -30,6 +31,7 @@
     frameworks.filter((f) => f.domain === "commercial").some((f) => f.active),
   );
   let isSettingsOpen = $state(false);
+  let isFrameworksExpanded = $state(false);
 </script>
 
 <header class="header-container">
@@ -42,11 +44,11 @@
       </span>
     </div>
 
-    <!-- Top Right Controls: AI, Theme, Sound -->
+    <!-- Top Right Controls: Lightmode, Sound, AI (Aligned right to left edge) -->
     <div class="toggle-controls">
-      <AIToggle onOpenSettings={() => (isSettingsOpen = true)} />
       <ThemeToggle />
       <SoundToggle />
+      <AIToggle onOpenSettings={() => (isSettingsOpen = true)} />
     </div>
   </div>
 
@@ -70,7 +72,7 @@
       RAG, and SWI-Prolog legal reasoning.
     </p>
 
-    <!-- Domain Master ON/OFF Buttons (Aligned on the same row) -->
+    <!-- Domain Master ON/OFF Buttons (Equal Sizing) -->
     <div class="domain-master-toggles">
       <!-- Labour Law Domain Master Toggle -->
       <button
@@ -114,14 +116,38 @@
     </div>
   </div>
 
-  <!-- Active Framework Toggles (With ON/OFF per framework item) -->
+  <!-- Active Framework Toggles Section -->
   <div class="frameworks-section">
-    <div class="frameworks-label">
-      <span class="bullet">•</span> FRAMEWORK DOMAIN RULES
-      <span class="count">({activeCount}/{frameworks.length} ACTIVE)</span>
+    <!-- Desktop Header Label (Only shown on large screens) -->
+    <div class="frameworks-header-desktop">
+      <div class="frameworks-label">
+        <span class="bullet">•</span> FRAMEWORK DOMAIN RULES
+        <span class="count">({activeCount}/{frameworks.length} ACTIVE)</span>
+      </div>
     </div>
 
-    <div class="badges-row">
+    <!-- Mobile Dropdown Button Header (Only shown on small screens <= 768px) -->
+    <button
+      type="button"
+      class="frameworks-dropdown-btn"
+      onclick={() => {
+        isFrameworksExpanded = !isFrameworksExpanded;
+        soundState.playClick();
+      }}
+      aria-expanded={isFrameworksExpanded}
+      title={isFrameworksExpanded ? "Collapse Framework Rules" : "Expand Framework Rules"}
+    >
+      <div class="frameworks-label">
+        <span class="bullet">•</span> FRAMEWORK DOMAIN RULES
+        <span class="count">({activeCount}/{frameworks.length} ACTIVE)</span>
+      </div>
+      <div class="dropdown-trigger">
+        <ChevronDown size={13} class="chevron-icon {isFrameworksExpanded ? 'open' : ''}" />
+      </div>
+    </button>
+
+    <!-- Framework Rule Badges (Always visible on desktop, collapsed by default on mobile) -->
+    <div class="badges-row" class:mobile-hidden={!isFrameworksExpanded}>
       {#each frameworks as fw (fw.id)}
         <button
           type="button"
@@ -197,7 +223,10 @@
   .toggle-controls {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
+    flex-direction: row-reverse;
     gap: 8px;
+    margin-left: auto;
   }
 
   .main-title {
@@ -214,7 +243,7 @@
     text-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
   }
 
-  /* Description + Domain Master Buttons Row (Placed on the same row!) */
+  /* Description + Domain Master Buttons Row */
   .description-row {
     display: flex;
     align-items: flex-start;
@@ -236,8 +265,9 @@
   .domain-master-toggles {
     display: flex;
     flex-direction: column;
-    gap: 5px;
-    align-items: flex-end;
+    gap: 6px;
+    align-items: stretch;
+    width: 245px;
     flex-shrink: 0;
   }
 
@@ -245,15 +275,18 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 5px 9px;
+    gap: 10px;
+    padding: 6px 10px;
     border-radius: 5px;
     cursor: pointer;
     font-family: var(--font-mono);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    min-width: 215px;
+    width: 100%;
+    min-height: 42px;
+    box-sizing: border-box;
     user-select: none;
     text-align: left;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
   }
 
   .domain-master-btn.labour {
@@ -318,6 +351,32 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
+    width: 100%;
+  }
+
+  .frameworks-header-desktop {
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+
+  .frameworks-dropdown-btn {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    background: rgba(13, 23, 36, 0.7);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    box-sizing: border-box;
+  }
+
+  .frameworks-dropdown-btn:hover {
+    background: rgba(19, 46, 53, 0.4);
+    border-color: rgba(0, 240, 255, 0.3);
   }
 
   .frameworks-label {
@@ -330,6 +389,21 @@
     display: flex;
     align-items: center;
     gap: 6px;
+  }
+
+  .dropdown-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  :global(.chevron-icon) {
+    color: var(--cyan-primary);
+    transition: transform 0.25s ease;
+  }
+
+  :global(.chevron-icon.open) {
+    transform: rotate(180deg);
   }
 
   .bullet {
@@ -347,6 +421,13 @@
     flex-wrap: wrap;
     gap: 0.45rem;
     align-items: center;
+    padding-top: 4px;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   .framework-toggle-btn {
@@ -432,8 +513,22 @@
     color: #5a6a78;
   }
 
+  :global([data-theme="light"]) .frameworks-dropdown-btn {
+    background: rgba(226, 232, 240, 0.85);
+    border-color: #cbd5e1;
+  }
+
+  :global([data-theme="light"]) .frameworks-dropdown-btn:hover {
+    background: rgba(203, 213, 225, 0.95);
+    border-color: #94a3b8;
+  }
+
   :global([data-theme="light"]) .frameworks-label {
     color: #5a6a78;
+  }
+
+  :global([data-theme="light"]) :global(.chevron-icon) {
+    color: #556c80;
   }
 
   :global([data-theme="light"]) .bullet {
@@ -444,12 +539,11 @@
     color: #8a9aa8;
   }
 
-  /* Distinct Light Mode Framework Button Colors */
   :global([data-theme="light"]) .framework-toggle-btn {
     background: var(--fw-light-bg);
     border-color: var(--fw-light-border);
     color: var(--fw-light-color);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .framework-toggle-btn.inactive {
@@ -478,17 +572,18 @@
     color: #94a3b8;
   }
 
-  /* Light Mode Domain Master Buttons */
   :global([data-theme="light"]) .domain-master-btn.labour {
     background: #e2e8f0;
     border-color: #94a3b8;
     color: #0f172a;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
   }
 
   :global([data-theme="light"]) .domain-master-btn.commercial {
     background: #cbd5e1;
     border-color: #64748b;
     color: #020617;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
   }
 
   :global([data-theme="light"]) .domain-master-btn:not(.active) {
@@ -511,5 +606,115 @@
 
   :global([data-theme="light"]) .master-desc {
     color: #64748b;
+  }
+
+  /* ─── Mobile Responsiveness ─── */
+  @media (max-width: 768px) {
+    .top-header-row {
+      flex-direction: column-reverse;
+      align-items: stretch;
+      gap: 0.6rem;
+    }
+
+    .toggle-controls {
+      width: 100%;
+      display: flex;
+      flex-direction: row-reverse;
+      justify-content: flex-start;
+      gap: 6px;
+    }
+
+    .tag-row {
+      width: 100%;
+    }
+
+    .tag-text {
+      font-size: 0.62rem;
+      letter-spacing: 1.5px;
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .text-kagua {
+      font-size: 1.5rem;
+      letter-spacing: 3px;
+    }
+
+    .description-row {
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .description {
+      font-size: 0.8rem;
+      line-height: 1.45;
+      max-width: 100%;
+    }
+
+    .domain-master-toggles {
+      width: 100%;
+      flex-direction: row;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .domain-master-btn {
+      flex: 1 1 0%;
+      width: 50%;
+      min-width: 0;
+      min-height: 42px;
+      padding: 6px 8px;
+      gap: 6px;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .master-title {
+      font-size: 0.58rem;
+      letter-spacing: 0.5px;
+    }
+
+    .master-desc {
+      display: none;
+    }
+
+    .master-badge {
+      font-size: 0.54rem;
+      padding: 1px 4px;
+    }
+
+    .frameworks-header-desktop {
+      display: none;
+    }
+
+    .frameworks-dropdown-btn {
+      display: flex;
+      padding: 3px 8px;
+      min-height: 24px;
+      border-radius: 4px;
+    }
+
+    .frameworks-label {
+      font-size: 0.58rem;
+      letter-spacing: 0.8px;
+    }
+
+    .badges-row {
+      gap: 0.35rem;
+    }
+
+    .badges-row.mobile-hidden {
+      display: none;
+    }
+
+    .framework-toggle-btn {
+      font-size: 0.65rem;
+      padding: 4px 8px;
+      gap: 5px;
+    }
   }
 </style>

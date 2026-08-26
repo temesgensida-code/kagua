@@ -35,4 +35,19 @@
     padding: 2.5rem 2rem;
     backdrop-filter: blur(20px);
   }
+
+  @media (max-width: 768px) {
+    .auth-card {
+      max-width: 100%;
+    }
+
+    .auth-card-inner {
+      padding: 1.25rem 1.1rem;
+      border-radius: 10px;
+    }
+
+    .auth-card-glow {
+      border-radius: 10px;
+    }
+  }
 </style>

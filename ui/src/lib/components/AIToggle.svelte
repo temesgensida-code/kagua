@@ -138,7 +138,7 @@
     background: rgba(175, 179, 183, 0.95);
     border-color: #99a3ab;
     color: #556c80;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .ai-toggle-btn:hover {
@@ -150,7 +150,7 @@
     background: #69818d;
     border-color: #556c80;
     color: #ffffff;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .ai-toggle-btn.active .ai-status-badge {
@@ -162,12 +162,39 @@
     background: rgba(175, 179, 183, 0.95);
     border-color: #99a3ab;
     color: #556c80;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 2px rgba(0, 0, 0, 0.4);
   }
 
   :global([data-theme="light"]) .settings-btn:hover {
     border-color: #69818d;
     color: #ffffff;
     background: #69818d;
+  }
+
+  /* ─── Mobile Responsiveness (Smaller Sizing) ─── */
+  @media (max-width: 768px) {
+    .ai-toggle-group {
+      height: 26px;
+      gap: 3px;
+    }
+
+    .ai-toggle-btn {
+      height: 26px;
+      padding: 0 6px;
+      font-size: 0.62rem;
+      gap: 4px;
+      border-radius: 4px;
+    }
+
+    .ai-status-badge {
+      font-size: 0.52rem;
+      padding: 1px 4px;
+    }
+
+    .settings-btn {
+      height: 26px;
+      width: 26px;
+      border-radius: 4px;
+    }
   }
 </style>

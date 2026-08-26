@@ -1309,4 +1309,107 @@
   :global([data-theme="light"]) .jump-doc-btn {
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
   }
+
+  /* ─── Mobile Responsiveness ─── */
+  @media (max-width: 640px) {
+    .result-header {
+      padding: 0.75rem;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.75rem;
+    }
+
+    .file-info {
+      width: 100%;
+    }
+
+    .file-title {
+      font-size: 0.92rem;
+      word-break: break-word;
+    }
+
+    .file-meta {
+      font-size: 0.65rem;
+      line-height: 1.45;
+      display: block;
+      margin-top: 3px;
+    }
+
+    .action-buttons,
+    .btn-rescan {
+      width: 100%;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .viewer-column {
+      height: 450px;
+    }
+
+    .export-card {
+      padding: 0.85rem;
+    }
+
+    .export-buttons {
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .btn-pdf-export,
+    .btn-json-export {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .findings-card {
+      padding: 0.85rem;
+      min-height: auto;
+    }
+
+    .findings-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+
+    .finding-item {
+      padding: 0.75rem;
+    }
+
+    .finding-top {
+      gap: 6px;
+    }
+
+    .finding-rule-title {
+      font-size: 0.78rem;
+    }
+
+    .card-action-row {
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+
+    .jump-doc-btn {
+      width: 100%;
+      justify-content: center;
+    }
+
+    .offset-badge {
+      align-self: flex-start;
+    }
+
+    .provenance-card,
+    .ai-reasoning-card {
+      padding: 0.85rem;
+    }
+
+    .prov-top,
+    .ai-item-top {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+  }
 </style>

@@ -453,4 +453,36 @@
   :global([data-theme="light"]) .status-title {
     color: #2d3a45;
   }
+
+  /* ─── Mobile Responsiveness ─── */
+  @media (max-width: 640px) {
+    .modal-card {
+      width: 95%;
+      max-height: 90vh;
+    }
+
+    .modal-header {
+      padding: 0.75rem 1rem;
+    }
+
+    .modal-body {
+      padding: 1rem;
+      gap: 1rem;
+      overflow-y: auto;
+    }
+
+    .modal-footer {
+      padding: 0.75rem 1rem;
+      flex-direction: column-reverse;
+      width: 100%;
+      gap: 8px;
+    }
+
+    .btn-secondary,
+    .btn-primary {
+      width: 100%;
+      text-align: center;
+      justify-content: center;
+    }
+  }
 </style>

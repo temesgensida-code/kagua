@@ -108,4 +108,35 @@
   :global([data-theme="light"]) .icon-slot.active {
     color: #ffffff;
   }
+
+  /* ─── Mobile Responsiveness (Smaller Sizing) ─── */
+  @media (max-width: 768px) {
+    .theme-toggle-card {
+      padding: 2px;
+      gap: 2px;
+      border-radius: 4px;
+    }
+
+    .sliding-indicator {
+      top: 2px;
+      left: 2px;
+      width: 22px;
+      height: 20px;
+      border-radius: 3px;
+    }
+
+    .sliding-indicator.light {
+      transform: translateX(24px);
+    }
+
+    .icon-slot {
+      width: 22px;
+      height: 20px;
+    }
+
+    .icon-slot :global(svg) {
+      width: 13px;
+      height: 13px;
+    }
+  }
 </style>
