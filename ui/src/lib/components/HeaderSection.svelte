@@ -613,7 +613,8 @@
     .top-header-row {
       flex-direction: column-reverse;
       align-items: stretch;
-      gap: 0.6rem;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
     }
 
     .toggle-controls {
@@ -621,7 +622,8 @@
       display: flex;
       flex-direction: row-reverse;
       justify-content: flex-start;
-      gap: 6px;
+      gap: 8px;
+      margin-bottom: 0.75rem;
     }
 
     .tag-row {
