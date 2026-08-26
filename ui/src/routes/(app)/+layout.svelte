@@ -4,7 +4,12 @@
   import '../../app.css';
   import { authStore } from '$lib/services/authStore.svelte';
   import { logout, silentRefresh } from '$lib/services/authApi';
+  import { warmupServices, resetWarmup } from '$lib/services/serviceWarmup';
+  import ServiceWarmupBanner from '$lib/components/ServiceWarmupBanner.svelte';
   import { goto } from '$app/navigation';
+
+  const RAW_API_BASE = (import.meta.env.VITE_PUBLIC_API_URL as string) || 'http://127.0.0.1:8080';
+  const API_BASE = RAW_API_BASE.replace(/\/$/, '');
 
   let { children } = $props();
 
@@ -19,12 +24,20 @@
       silentRefresh();
     }
 
+    // Phase 4: silently wake parser & reasoner in the background
+    warmupServices();
+
     // Refresh token every 8 minutes (since JWT expires in 15 mins)
     const interval = setInterval(() => {
       if (authStore.refreshToken) {
         silentRefresh();
       }
     }, 8 * 60 * 1000);
+
+    // Phase 5: heartbeat every 10 minutes to keep services warm
+    const warmupHeartbeat = setInterval(() => {
+      fetch(`${API_BASE}/warmup`).catch(() => {});
+    }, 10 * 60 * 1000);
 
     // Refresh token as soon as user returns to this browser tab
     function handleVisibilityChange() {
@@ -36,6 +49,7 @@
 
     return () => {
       clearInterval(interval);
+      clearInterval(warmupHeartbeat);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   });
@@ -59,6 +73,9 @@
   <main class="app-main">
     {@render children()}
   </main>
+
+  <!-- Service warm-up status banner (bottom-right, auto-dismisses when ready) -->
+  <ServiceWarmupBanner />
 </div>
 
 <style>

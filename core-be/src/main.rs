@@ -28,6 +28,7 @@ use crate::pdf::generate_audit_pdf;
 use crate::service::process_analysis_pipeline;
 use crate::ws::{ws_handler, WsState};
 use crate::handlers::auth as auth_handlers;
+use crate::handlers::warmup::warmup_handler;
 
 #[tokio::main]
 async fn main() {
@@ -97,6 +98,8 @@ async fn main() {
     // ── Main application ──────────────────────────────────────────────────
     let app = Router::new()
         .route("/health", get(health_check))
+        // Public warm-up endpoint — pings parser & reasoner, no JWT required
+        .route("/warmup", get(warmup_handler))
         .route("/ws", get(ws_handler))
         // Protected routes — require a valid Bearer JWT
         .route("/analyze", post(analyze_handler))
