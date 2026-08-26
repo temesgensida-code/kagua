@@ -50,7 +50,7 @@ async function apiFetch(
   return res;
 }
 
-async function silentRefresh(): Promise<boolean> {
+export async function silentRefresh(): Promise<boolean> {
   if (!authStore.refreshToken) return false;
   try {
     const res = await fetch(`${API_BASE}/auth/refresh`, {

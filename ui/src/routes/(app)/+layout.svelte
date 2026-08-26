@@ -1,8 +1,9 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import favicon from '$lib/assets/favicon.png';
   import '../../app.css';
   import { authStore } from '$lib/services/authStore.svelte';
-  import { logout } from '$lib/services/authApi';
+  import { logout, silentRefresh } from '$lib/services/authApi';
   import { goto } from '$app/navigation';
 
   let { children } = $props();
@@ -11,6 +12,33 @@
     await logout();
     await goto('/login');
   }
+
+  onMount(() => {
+    // Proactively refresh token on initial page load if logged in
+    if (authStore.refreshToken) {
+      silentRefresh();
+    }
+
+    // Refresh token every 8 minutes (since JWT expires in 15 mins)
+    const interval = setInterval(() => {
+      if (authStore.refreshToken) {
+        silentRefresh();
+      }
+    }, 8 * 60 * 1000);
+
+    // Refresh token as soon as user returns to this browser tab
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible' && authStore.refreshToken) {
+        silentRefresh();
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  });
 </script>
 
 <svelte:head>
