@@ -145,18 +145,20 @@
     color: #5a6a78;
   }
 
-  /* ─── Mobile Responsiveness ─── */
-  @media (max-width: 640px) {
+  /* ─── Mobile Responsiveness (Edge Spacing & Padding) ─── */
+  @media (max-width: 768px) {
     .app-root {
-      padding: 0.5rem 0.5rem 1rem 0.5rem;
+      padding: 0.75rem 1.25rem 1.5rem 1.25rem;
+      box-sizing: border-box;
     }
 
     .app-main {
-      padding: 0;
+      padding: 0 0.25rem;
+      box-sizing: border-box;
     }
 
     .session-bar {
-      padding: 0.25rem 0.25rem 0.5rem;
+      padding: 0.35rem 0.25rem 0.65rem 0.25rem;
       gap: 0.5rem;
       justify-content: space-between;
     }
@@ -166,12 +168,22 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-      max-width: 200px;
+      max-width: 180px;
     }
 
     .logout-btn {
-      padding: 0.25rem 0.55rem;
-      font-size: 0.6rem;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.62rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .app-root {
+      padding: 0.5rem 1rem 1.25rem 1rem;
+    }
+
+    .app-main {
+      padding: 0;
     }
   }
 </style>
