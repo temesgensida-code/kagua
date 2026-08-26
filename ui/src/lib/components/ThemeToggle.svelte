@@ -8,8 +8,8 @@
   <button
     type="button"
     class="theme-toggle-card"
-    onclick={() => {
-      themeState.toggle();
+    onclick={(e) => {
+      themeState.toggle(e);
       soundState.playClick();
     }}
     title={themeState.isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
