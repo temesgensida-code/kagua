@@ -1,50 +1,93 @@
 services:
+  # ============================================================
   # 1. SWI-Prolog Reasoner Engine
+  #    - Lightweight Prolog HTTP server
+  #    - Starter plan: no cold-starts, always on (~$7/mo)
+  # ============================================================
   - type: web
     name: kagua-reasoner
     runtime: docker
-    dockerContext: reasoner-engine
+    dockerContext: .
     dockerfilePath: reasoner-engine/Dockerfile
+    plan: starter          # $7/mo — no sleep, no cold-start 502s
+    region: oregon
     envVars:
       - key: PORT
         value: 8081
-    plan: free
 
+  # ============================================================
   # 2. Python Legal Parser & RAG Engine
+  #    - FastAPI + spaCy NER + RAG
+  #    - Starter plan: always on, handles large PDF parsing
+  # ============================================================
   - type: web
     name: kagua-parser
     runtime: docker
-    dockerContext: parser
+    dockerContext: .
     dockerfilePath: parser/Dockerfile
+    plan: starter          # $7/mo — no sleep, no cold-start 502s
+    region: oregon
     envVars:
       - key: PORT
         value: 8001
-    plan: free
 
+  # ============================================================
   # 3. Rust Core Backend API
+  #    - Axum API: auth, JWT, analysis pipeline orchestration
+  #    - Starter plan: always on
+  # ============================================================
   - type: web
     name: kagua-core-be
     runtime: docker
-    dockerContext: core-be
+    dockerContext: .
     dockerfilePath: core-be/Dockerfile
+    plan: starter          # $7/mo — no sleep, reliable for auth
+    region: oregon
     envVars:
+      # ── Database ──────────────────────────────────────────
       - key: DATABASE_URL
         fromDatabase:
           name: kagua-db
           property: connectionString
-      - key: REASONER_URL
-        value: http://kagua-reasoner:8081
-      - key: PARSER_URL
-        value: http://kagua-parser:8001
-      - key: JWT_SECRET
-        generateValue: true
-      - key: FRONTEND_URL
-        value: "*"
-    plan: free
 
+      # ── Internal service routing (private network) ─────────
+      - key: PARSER_URL
+        fromService:
+          name: kagua-parser
+          type: web
+          property: hostport         # uses Render private network
+
+      - key: REASONER_URL
+        fromService:
+          name: kagua-reasoner
+          type: web
+          property: hostport         # uses Render private network
+
+      # ── Security ──────────────────────────────────────────
+      - key: JWT_SECRET
+        generateValue: true          # Render auto-generates a secure random value
+
+      # ── CORS & Email ───────────────────────────────────────
+      - key: FRONTEND_URL
+        value: "https://kagua.temesgen.works"
+
+      - key: RESEND_API_KEY
+        sync: false                  # You will paste this manually in the Render dashboard
+
+      - key: FROM_EMAIL
+        value: "noreply@kagua.temesgen.works"
+
+      - key: FROM_NAME
+        value: "Kagua Compliance"
+
+# ============================================================
+# PostgreSQL Managed Database
+#   - Starter plan: 1 GB storage, no expiry, daily backups
+#   - $7/mo — production-grade persistent storage
+# ============================================================
 databases:
-  # Managed PostgreSQL Database
   - name: kagua-db
     databaseName: kagua
     user: kagua_user
-    plan: free
+    plan: starter          # $7/mo — persistent, no 90-day expiry, daily backups
+    region: oregon
