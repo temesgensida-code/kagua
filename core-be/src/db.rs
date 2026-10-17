@@ -23,6 +23,10 @@ pub async fn init_db(database_url: &str) -> PgPool {
         .execute(&pool)
         .await
         .expect("Migration 003 failed");
+    sqlx::raw_sql(include_str!("../migrations/004_create_audit_reports.sql"))
+        .execute(&pool)
+        .await
+        .expect("Migration 004 failed");
 
     info!("Seeding test user...");
     if let Ok(hash) = crate::auth::password::hash_password("@Te1to2ge3si4") {

@@ -5,6 +5,11 @@
     type AnalysisReport,
     type MappedViolation,
   } from "$lib/services/api";
+  import {
+    exportReportAsJson,
+    exportReportAsCsv,
+    exportReportAsMarkdown,
+  } from "$lib/services/exportService";
   import type { Framework } from "$lib/data/sampleDocs";
   import { soundState } from "$lib/services/sound.svelte";
   import {
@@ -76,18 +81,20 @@
 
   function handleDownloadJson() {
     soundState.playClick();
-    const dataStr = JSON.stringify(
-      report || { filename: file.name, violations, score },
-      null,
-      2,
-    );
-    const blob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `kagua_audit_${file.name.replace(/[^a-z0-9]/gi, "_")}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (!report) return;
+    exportReportAsJson(report);
+  }
+
+  function handleDownloadCsv() {
+    soundState.playClick();
+    if (!report) return;
+    exportReportAsCsv(report);
+  }
+
+  function handleDownloadMarkdown() {
+    soundState.playClick();
+    if (!report) return;
+    exportReportAsMarkdown(report);
   }
 
   function selectViolation(idx: number) {
@@ -227,6 +234,20 @@
             onclick={handleDownloadJson}
           >
             <FileCode size={14} /> EXPORT JSON
+          </button>
+          <button
+            type="button"
+            class="btn-json-export"
+            onclick={handleDownloadCsv}
+          >
+            <FileText size={14} /> EXPORT CSV
+          </button>
+          <button
+            type="button"
+            class="btn-json-export"
+            onclick={handleDownloadMarkdown}
+          >
+            <FileText size={14} /> EXPORT BRIEF (MD)
           </button>
         </div>
       </div>

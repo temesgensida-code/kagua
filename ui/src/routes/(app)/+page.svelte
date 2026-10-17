@@ -5,6 +5,7 @@
   import { INITIAL_FRAMEWORKS, type Framework } from '$lib/data/sampleDocs';
   import { analyzeDocument, subscribeProgress, type AnalysisReport, type ProgressEvent } from '$lib/services/api';
   import { aiSettings } from '$lib/services/aiSettings.svelte';
+  import { saveAuditToLocalVault } from '$lib/services/auditVault.svelte';
 
   let frameworks = $state<Framework[]>(INITIAL_FRAMEWORKS);
   let selectedDomain = $state<string>('auto');
@@ -74,6 +75,8 @@
         apiKey: aiSettings.apiKey
       });
       report = resultReport;
+      // Persist to local IndexedDB vault for offline recovery
+      saveAuditToLocalVault(resultReport).catch(() => {});
     } catch (err: any) {
       console.error('Backend analysis error:', err);
       currentStageMessage = `ERROR: ${err.message}`;

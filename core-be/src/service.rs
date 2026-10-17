@@ -382,6 +382,9 @@ pub async fn process_analysis_pipeline(
         ai_model_used,
         ai_facts_count,
         ai_reasoning,
+        id: None,
+        compliance_score: None,
+        created_at: None,
     };
 
     Ok(report)

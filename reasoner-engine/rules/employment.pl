@@ -600,3 +600,173 @@ check_violation(Domain, violation{
     doc_fact(sick_leave_first_month_rate_percent, RATE),
     RATE < 100.
 
+%% ---------------------------------------------------------------------------
+%% Article 4, 6 & 7 — Mandatory Employment Particulars Omission
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Articles 4, 6 & 7',
+    title:         'Missing Mandatory Employment Contract Particulars',
+    severity:      critical,
+    description:   'The employment agreement omits mandatory statutory particulars such as precise job category, place of work, wage determination mechanism, or signed agreement terms.',
+    recommendation: 'Ensure all required particulars under Article 6 (job title, workplace, rate of wages, pay calculation mode, signature) are explicitly incorporated.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(missing_mandatory_contract_terms, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 18 — Excessive Contract Suspension / Temporary Layoff Period
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 18',
+    title:         'Excessive Contract Suspension / Lay-Off Duration',
+    severity:      critical,
+    description:   Desc,
+    recommendation: 'Cap temporary contract suspension / lay-off at a maximum of 90 days and notify the Ministry within 3 working days per Article 18.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(contract_suspension_days, Days),
+    number(Days),
+    Days > 90,
+    format(atom(Desc),
+           'Contract suspension / temporary layoff period (~w days) exceeds the maximum statutory limit of 90 days under Article 18.',
+           [Days]).
+
+%% ---------------------------------------------------------------------------
+%% Article 27 — Unlawful Summary Dismissal Grounds / Due Process Violation
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 27',
+    title:         'Unlawful Summary Dismissal Grounds Without Notice',
+    severity:      critical,
+    description:   'Contract incorporates immediate termination or summary dismissal grounds not recognized under the exhaustive statutory list in Article 27.',
+    recommendation: 'Limit immediate termination strictly to grounds enumerated in Article 27 and adhere to written notice deadlines.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(unlawful_summary_dismissal_grounds, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 39(1) & 40 — Sub-Statutory Severance Pay Calculation Formula
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Articles 39 & 40',
+    title:         'Sub-Statutory Severance Pay Calculation Formula',
+    severity:      critical,
+    description:   'Contract severance formula provides less than the statutory baseline (30 times daily wage for year 1, plus 1/3 of monthly salary per additional year of service).',
+    recommendation: 'Align severance calculation with Articles 39 & 40: 30 days base wages for first year plus 1/3 monthly wage for each subsequent year of service.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(sub_statutory_severance_formula, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 68(1)(a-d) — Sub-Statutory Overtime Premium Multiplier Rates
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 68(1)',
+    title:         'Sub-Statutory Overtime Multiplier Rate',
+    severity:      critical,
+    description:   Desc,
+    recommendation: 'Provide statutory overtime rates: min 1.25x for day OT, 1.5x for night OT, 2.0x for rest day, and 2.5x for public holiday OT under Article 68.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(overtime_multiplier_rate, Rate),
+    number(Rate),
+    Rate < 1.25,
+    format(atom(Desc),
+           'Overtime rate multiplier (~wx) is below the minimum statutory threshold of 1.25x base pay required by Article 68(1).',
+           [Rate]).
+
+%% ---------------------------------------------------------------------------
+%% Article 73 & 74 — Uncompensated Public Holiday Work
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Articles 73 & 74',
+    title:         'Uncompensated Public Holiday Work',
+    severity:      critical,
+    description:   'Contract mandates or permits work on public holidays without providing statutory 2.5x holiday pay or compensatory paid time off.',
+    recommendation: 'Ensure public holiday work is remunerated at 2.5 times standard rate or compensated with paid time off per Articles 73 & 74.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(public_holiday_work_uncompensated, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 77(1) — Missing Progressive Annual Leave Scale (+1 Day / 2 Years)
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 77(1)',
+    title:         'Absence of Progressive Annual Leave Scaling',
+    severity:      warning,
+    description:   'Contract fixes annual leave at a static figure without recognizing the statutory entitlement of +1 additional working day for every additional 2 years of service.',
+    recommendation: 'Incorporate statutory progressive annual leave accrual (16 days base + 1 day per 2 additional years) per Article 77(1).'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(lacks_progressive_annual_leave_scale, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 85(1-2) — Sub-Statutory Graduated Sick Leave Pay Tiers
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 85',
+    title:         'Sub-Statutory Graduated Sick Leave Pay Tiers',
+    severity:      critical,
+    description:   'Sick leave provisions fail to provide 100% pay for the first month and at least 50% pay for the subsequent second and third months.',
+    recommendation: 'Guarantee tiered sick leave payment under Article 85: 1st month at 100% wages, 2nd and 3rd months at 50% wages.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(sub_statutory_sick_pay_tiers, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 87(5) — Prohibited Hazardous Assignment for Female Employees
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 87(5)',
+    title:         'Prohibited Hazardous Assignment for Female Employees',
+    severity:      critical,
+    description:   'Contract assigns female employees to statutory prohibited dangerous or hazardous activities (e.g., underground mining or extreme heavy physical operations).',
+    recommendation: 'Eliminate hazardous work assignments prohibited for female workers under Article 87(5).'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(prohibited_female_hazardous_work, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 91(1) — Overtime Assignment for Young Workers (Ages 15-17)
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 91(1)',
+    title:         'Illegal Overtime Assignment for Young Workers',
+    severity:      critical,
+    description:   'Contract assigns or permits overtime work for young workers between 15 and 18 years of age, which is strictly prohibited under Article 91(1).',
+    recommendation: 'Prohibit all overtime work for young workers; maximum hours are capped at 7 hours per day with zero overtime under Article 91(1).'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(minimum_worker_age, Age),
+    number(Age),
+    Age >= 15,
+    Age < 18,
+    doc_fact(young_worker_overtime_assigned, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 92 & 93 — Missing Workplace Safety Committee & First Aid Provision
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Articles 92 & 93',
+    title:         'Missing Occupational Health, Safety & First-Aid Infrastructure',
+    severity:      warning,
+    description:   'Contract or enterprise policies omit mandatory statutory provisions for occupational safety protocols, emergency first aid equipment, and workplace safety committees.',
+    recommendation: 'Establish an occupational health and safety committee and provide certified first-aid equipment free of charge under Articles 92 & 93.'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(missing_occupational_safety_committee, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 14(1)(d) — Compulsory Purchase from Employer-Designated Outlets
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Labour Proclamation No. 1156/2019 - Article 14(1)(d)',
+    title:         'Unlawful Compulsion to Purchase from Designated Stores',
+    severity:      critical,
+    description:   'Contract coerces employees to purchase goods, provisions, or services from employer-owned or designated company stores.',
+    recommendation: 'Remove compulsory company store purchase requirements per Article 14(1)(d).'
+}) :-
+    ethiopian_domain(Domain),
+    doc_fact(compulsory_company_store_purchase, true).
+

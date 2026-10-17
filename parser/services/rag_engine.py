@@ -1170,6 +1170,80 @@ def extract_labour_compliance_facts(raw_text: str) -> Dict[str, Any]:
                 "article_reference": "Article 6"
             }
 
+    # 15. Contract Suspension / Layoff Period (Article 18: max 90 days)
+    m_susp = re.search(r"(?i)\b(?:suspension|lay-?off|temporary\s+layoff)[^\n.]{0,60}?(\d+)\s*days?", full_lower)
+    if m_susp:
+        susp_days = int(m_susp.group(1))
+        prolog_facts["contract_suspension_days"] = susp_days
+        fact_provenance["contract_suspension_days"] = {
+            "value": susp_days,
+            "source_text": m_susp.group(0),
+            "article_reference": "Article 18"
+        }
+
+    # 16. Overtime Multiplier Rate (Article 68: min 1.25x)
+    m_ot_mult = re.search(r"(?i)\b(?:overtime\s+rate|overtime\s+multiplier|overtime\s+premium)[^\n.]{0,40}?(\d+(?:\.\d+)?)\s*(?:x|times|\b)", full_lower)
+    if m_ot_mult:
+        try:
+            ot_rate = float(m_ot_mult.group(1))
+            if 0.5 <= ot_rate <= 3.0:
+                prolog_facts["overtime_multiplier_rate"] = ot_rate
+                fact_provenance["overtime_multiplier_rate"] = {
+                    "value": ot_rate,
+                    "source_text": m_ot_mult.group(0),
+                    "article_reference": "Article 68(1)"
+                }
+        except ValueError:
+            pass
+
+    # 17. Uncompensated Public Holiday Work (Articles 73 & 74)
+    if any(kw in full_lower for kw in [
+        "holiday work without additional", "public holiday at regular rate",
+        "holidays shall be treated as regular working days", "no holiday premium",
+        "work on public holidays is mandatory without extra pay"
+    ]):
+        prolog_facts["public_holiday_work_uncompensated"] = True
+        fact_provenance["public_holiday_work_uncompensated"] = {
+            "value": True,
+            "source_text": "Public holiday work specified without statutory 2.5x compensation or paid day off.",
+            "article_reference": "Articles 73 & 74"
+        }
+
+    # 18. Sub-Statutory Severance Formula (Articles 39 & 40)
+    if any(kw in full_lower for kw in [
+        "severance shall not increase with length of service", "flat severance regardless of tenure",
+        "severance capped at fifteen days", "maximum of fifteen days severance"
+    ]):
+        prolog_facts["sub_statutory_severance_formula"] = True
+        fact_provenance["sub_statutory_severance_formula"] = {
+            "value": True,
+            "source_text": "Severance formula does not provide statutory baseline (30 days + 1/3 monthly salary per year).",
+            "article_reference": "Articles 39 & 40"
+        }
+
+    # 19. Young Worker Overtime (Article 91(1): strictly 0)
+    if prolog_facts.get("minimum_worker_age", 25) < 18 and any(kw in full_lower for kw in [
+        "young worker may perform overtime", "juvenile overtime", "minor overtime"
+    ]):
+        prolog_facts["young_worker_overtime_assigned"] = True
+        fact_provenance["young_worker_overtime_assigned"] = {
+            "value": True,
+            "source_text": "Overtime assigned to worker under 18 years of age.",
+            "article_reference": "Article 91(1)"
+        }
+
+    # 20. Compulsory Company Store Purchase (Article 14(1)(d))
+    if any(kw in full_lower for kw in [
+        "must purchase from company store", "compulsory purchase of company goods",
+        "goods must be acquired from designated employer outlets"
+    ]):
+        prolog_facts["compulsory_company_store_purchase"] = True
+        fact_provenance["compulsory_company_store_purchase"] = {
+            "value": True,
+            "source_text": "Worker compelled to purchase goods or services from designated employer outlets.",
+            "article_reference": "Article 14(1)(d)"
+        }
+
     # Assemble retrieved document chunks + matched Ethiopian Labour Proclamation Articles
     all_chunks = []
 

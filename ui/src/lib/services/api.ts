@@ -21,6 +21,7 @@ export interface AIFactReasoning {
 }
 
 export interface AnalysisReport {
+  id?: string;
   filename: string;
   text_length: number;
   domains_checked: any;
@@ -29,6 +30,7 @@ export interface AnalysisReport {
   total_violations: number;
   critical_count: number;
   warning_count: number;
+  compliance_score?: number;
   violations: MappedViolation[];
   entities_extracted: number;
   clauses_detected: number;
@@ -42,6 +44,25 @@ export interface AnalysisReport {
   ai_model_used?: string;
   ai_facts_count?: number;
   ai_reasoning?: AIFactReasoning[];
+  created_at?: string;
+}
+
+export interface AuditReportSummary {
+  id: string;
+  document_name: string;
+  document_hash: string;
+  domain: string;
+  total_violations: number;
+  critical_count: number;
+  warning_count: number;
+  compliance_score: number;
+  pii_redacted_count: number;
+  created_at: string;
+}
+
+export interface ListReportsResponse {
+  total: number;
+  reports: AuditReportSummary[];
 }
 
 export interface ProgressEvent {
@@ -173,5 +194,33 @@ export function subscribeProgress(onProgress: (event: ProgressEvent) => void): (
   } catch (err) {
     console.warn('WebSocket subscription failed:', err);
     return () => {};
+  }
+}
+
+export async function fetchReports(limit: number = 20, offset: number = 0): Promise<ListReportsResponse> {
+  const response = await fetchWithAuth(`${API_BASE}/reports?limit=${limit}&offset=${offset}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch audit reports (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function fetchReportById(id: string): Promise<AnalysisReport> {
+  const response = await fetchWithAuth(`${API_BASE}/reports/${id}`);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to fetch report ${id} (${response.status}): ${errorText}`);
+  }
+  return response.json();
+}
+
+export async function deleteReportById(id: string): Promise<void> {
+  const response = await fetchWithAuth(`${API_BASE}/reports/${id}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to delete report ${id} (${response.status}): ${errorText}`);
   }
 }

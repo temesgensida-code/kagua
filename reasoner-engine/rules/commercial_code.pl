@@ -497,3 +497,137 @@ check_violation(Domain, violation{
     doc_fact(has_reserve_clause, true),
     \+ doc_fact(legal_reserve_transfer_percent, _),
     \+ doc_fact(plc_legal_reserve_transfer_percent, _).
+
+%% ---------------------------------------------------------------------------
+%% Articles 96-102 — Commercial Registration: Mandatory Notice & Publication
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 96-102',
+    title:         'Missing Commercial Registration & Notice Publication',
+    severity:      warning,
+    description:   'Company formation or amendments lack mandatory legal publication in the commercial register and official gazette within statutory timeframes.',
+    recommendation: 'Complete mandatory commercial registration and publish company formation notice per Articles 96-102.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(missing_commercial_registration_publication, true).
+
+%% ---------------------------------------------------------------------------
+%% Articles 284 & 288 — Absolute Prohibition of Share Transfers in Share Company
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 284 & 288',
+    title:         'Unlawful Absolute Prohibition on Share Transfers',
+    severity:      critical,
+    description:   'Articles of association impose a blanket or absolute prohibition on the assignment or transfer of shares, violating the freely transferable nature of Share Company equity.',
+    recommendation: 'Revise transfer restrictions; statutory approval clauses may only regulate, but never completely extinguish, a shareholder right to transfer shares under Article 288.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, share_company),
+    doc_fact(absolute_share_transfer_ban, true).
+
+%% ---------------------------------------------------------------------------
+%% Articles 337-344 — Missing Statutory Board of Auditors for Share Company
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 337-344',
+    title:         'Missing Statutory Independent External Auditors',
+    severity:      critical,
+    description:   'Share company statutes omit mandatory independent external auditors or board of auditors elected by the general meeting.',
+    recommendation: 'Appoint one or more independent certified external auditors to inspect company books and accounts per Articles 337-344.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, share_company),
+    \+ doc_fact(has_statutory_auditors, true).
+
+%% ---------------------------------------------------------------------------
+%% Articles 388-392 — Sub-Statutory General Meeting Quorum Clause
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 388-392',
+    title:         'Sub-Statutory General Meeting Quorum Requirements',
+    severity:      critical,
+    description:   'General meeting quorum requirement is set below the statutory thresholds (at least 50% for ordinary meetings, 66.6% for extraordinary meetings on first call).',
+    recommendation: 'Set ordinary general meeting quorum to at least 50% of voting shares, and extraordinary quorum to at least two-thirds (66.6%) on first call per Articles 388 & 392.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, share_company),
+    doc_fact(sub_statutory_general_meeting_quorum, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 442 — Late Annual General Meeting (Beyond 4 Months of Fiscal Year End)
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 442',
+    title:         'Excessive Delay in Convening Annual General Meeting',
+    severity:      warning,
+    description:   Desc,
+    recommendation: 'Convene the annual ordinary general meeting within 4 months from the close of each financial year as mandated by Article 442.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, share_company),
+    doc_fact(annual_general_meeting_delay_months, Months),
+    number(Months),
+    Months > 4,
+    format(atom(Desc),
+           'Annual General Meeting convening deadline (~w months after fiscal year end) exceeds the statutory limit of 4 months under Article 442.',
+           [Months]).
+
+%% ---------------------------------------------------------------------------
+%% Article 523 — Sub-Statutory Consent Threshold for PLC Share Transfer to Non-Members
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 523',
+    title:         'Sub-Statutory Quorum for PLC Share Transfer to Non-Members',
+    severity:      critical,
+    description:   'PLC articles permit share transfers to outside non-members with less than the statutory majority representing at least 75% (three-quarters) of total capital.',
+    recommendation: 'Ensure share transfers to non-members require consent of partners representing at least 75% of capital under Article 523.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, plc),
+    doc_fact(plc_non_member_transfer_consent_percent, Pct),
+    number(Pct),
+    Pct < 75,
+    format(atom(Desc),
+           'Partner consent threshold for outside share transfer (~w%) is below the statutory mandatory requirement of 75% (3/4) of capital under Article 523.',
+           [Pct]).
+
+%% ---------------------------------------------------------------------------
+%% Article 534-543 — One-Person PLC Statutory Compliance Deficit
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Articles 534-543',
+    title:         'One-Person PLC Operational & Asset Segregation Deficit',
+    severity:      critical,
+    description:   'One-person PLC fails to maintain statutory asset segregation, sole-proprietor corporate resolution registers, or appropriate single-member designation.',
+    recommendation: 'Comply with Articles 534-543: strictly segregate personal assets, keep a signed resolution register, and register as a One-Person PLC.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, one_person_plc),
+    doc_fact(one_person_plc_compliance_deficit, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 296(3) — Dual Chairman and General Manager (CEO) Roles Without Authority
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 296(3)',
+    title:         'Unauthorized Dual Board Chair and General Manager Appointment',
+    severity:      warning,
+    description:   'The Board Chairperson concurrently holds the post of General Manager / CEO without explicit authorization provided in the memorandum or articles of association.',
+    recommendation: 'Separate the roles of Board Chairperson and General Manager, or explicitly authorize dual appointments in the articles per Article 296(3).'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(company_type, share_company),
+    doc_fact(dual_chair_ceo_unauthorized, true).
+
+%% ---------------------------------------------------------------------------
+%% Article 308 — Undisclosed Competing Business Conducted by Director
+%% ---------------------------------------------------------------------------
+check_violation(Domain, violation{
+    rule:          'Ethiopian Commercial Code Proclamation No. 1243/2021 - Article 308',
+    title:         'Unauthorized Competing Business by Director (Conflict of Interest)',
+    severity:      critical,
+    description:   'A director engages in businesses directly competing with the company without prior approval from the general meeting of shareholders.',
+    recommendation: 'Prohibit directors from carrying on competing business without explicit shareholder general meeting authorization under Article 308.'
+}) :-
+    ethiopian_commercial_domain(Domain),
+    doc_fact(director_competing_business_unauthorized, true).

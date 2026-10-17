@@ -28,7 +28,9 @@ use crate::pdf::generate_audit_pdf;
 use crate::service::process_analysis_pipeline;
 use crate::ws::{ws_handler, WsState};
 use crate::handlers::auth as auth_handlers;
+use crate::handlers::reports as report_handlers;
 use crate::handlers::warmup::warmup_handler;
+use sha2::{Digest, Sha256};
 
 #[tokio::main]
 async fn main() {
@@ -104,6 +106,8 @@ async fn main() {
         // Protected routes — require a valid Bearer JWT
         .route("/analyze", post(analyze_handler))
         .route("/report/pdf", post(generate_pdf_handler))
+        .route("/reports", get(report_handlers::list_reports))
+        .route("/reports/:id", get(report_handlers::get_report).delete(report_handlers::delete_report))
         // Auth routes mounted under /auth
         .nest("/auth", auth_router)
         .layer(cors)
@@ -191,16 +195,58 @@ async fn analyze_handler(
         (StatusCode::BAD_REQUEST, "Missing 'file' field in multipart form upload".to_string())
     })?;
 
-    if bytes.is_empty() {
-        return Err((StatusCode::BAD_REQUEST, "Uploaded file stream is empty".to_string()));
-    }
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let document_hash = format!("{:x}", hasher.finalize());
 
     let report = process_analysis_pipeline(
         filename, content_type, bytes, domain_spec, ai_params, &state.ws_state
     ).await?;
 
+    let compliance_score = (100.0 - (report.critical_count as f64 * 15.0 + report.warning_count as f64 * 5.0)).max(0.0);
+    let report_id = uuid::Uuid::new_v4();
+    let created_at = chrono::Utc::now();
+    let mut final_report = report;
+    final_report.id = Some(report_id);
+    final_report.compliance_score = Some(compliance_score);
+    final_report.created_at = Some(created_at);
 
-    Ok(Json(report))
+    let domain_str = final_report.suggested_domain.clone().unwrap_or_else(|| "all".to_string());
+    let pii_count = final_report.pii_redacted_count.unwrap_or(0) as i32;
+
+    if let Ok(report_payload) = serde_json::to_value(&final_report) {
+        let insert_res = sqlx::query(
+            r#"
+            INSERT INTO audit_reports (
+                id, user_id, document_name, document_hash, domain,
+                total_violations, critical_count, warning_count,
+                compliance_score, pii_redacted_count, report_payload, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            "#
+        )
+        .bind(report_id)
+        .bind(auth_user.user_id)
+        .bind(&final_report.filename)
+        .bind(&document_hash)
+        .bind(&domain_str)
+        .bind(final_report.total_violations as i32)
+        .bind(final_report.critical_count as i32)
+        .bind(final_report.warning_count as i32)
+        .bind(compliance_score)
+        .bind(pii_count)
+        .bind(report_payload)
+        .bind(created_at)
+        .execute(&state.db)
+        .await;
+
+        if let Err(e) = insert_res {
+            tracing::warn!("Failed to persist audit report to DB: {}", e);
+        } else {
+            info!("Audit report {} persisted for user {}", report_id, auth_user.user_id);
+        }
+    }
+
+    Ok(Json(final_report))
 }
 
 async fn generate_pdf_handler(

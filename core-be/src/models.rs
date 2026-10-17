@@ -1,4 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Entity returned from Python `/parse` endpoint
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,6 +126,8 @@ pub struct AIExtractionResponse {
 /// Final comprehensive analysis report returned by `POST /analyze`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalysisReport {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Uuid>,
     pub filename: String,
     pub text_length: usize,
     pub domains_checked: serde_json::Value,
@@ -132,6 +136,8 @@ pub struct AnalysisReport {
     pub total_violations: usize,
     pub critical_count: usize,
     pub warning_count: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compliance_score: Option<f64>,
     pub violations: Vec<MappedViolation>,
     pub entities_extracted: usize,
     pub clauses_detected: usize,
@@ -145,6 +151,38 @@ pub struct AnalysisReport {
     pub ai_model_used: Option<String>,
     pub ai_facts_count: Option<usize>,
     pub ai_reasoning: Option<Vec<AIFactReasoning>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<DateTime<Utc>>,
+}
+
+/// Summary item for listing historical audit reports
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
+pub struct AuditReportSummary {
+    pub id: Uuid,
+    pub document_name: String,
+    pub document_hash: String,
+    pub domain: String,
+    pub total_violations: i32,
+    pub critical_count: i32,
+    pub warning_count: i32,
+    pub compliance_score: f64,
+    pub pii_redacted_count: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Client-friendly serializable summary
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditReportSummaryDto {
+    pub id: Uuid,
+    pub document_name: String,
+    pub document_hash: String,
+    pub domain: String,
+    pub total_violations: i32,
+    pub critical_count: i32,
+    pub warning_count: i32,
+    pub compliance_score: f64,
+    pub pii_redacted_count: i32,
+    pub created_at: DateTime<Utc>,
 }
 
 /// WebSocket Progress Stage Event
