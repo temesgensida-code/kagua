@@ -59,7 +59,7 @@
     width: 100%;
     padding: 0.75rem 1rem;
     background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(0, 240, 255, 0.18);
+    border: 1px solid rgba(107, 138, 153, 0.22);
     border-radius: 7px;
     color: var(--text-main);
     font-family: var(--font-body);
@@ -74,7 +74,7 @@
 
   .auth-input:focus {
     border-color: var(--cyan-primary);
-    box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.1);
+    box-shadow: 0 0 0 3px rgba(107, 138, 153, 0.15);
   }
 
   .auth-input.has-error {

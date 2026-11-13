@@ -4,11 +4,11 @@
   --bg-dark: #070b10;
   --bg-panel: #0d1520;
   --bg-panel-hover: #121c2b;
-  --grid-color: rgba(0, 240, 255, 0.035);
+  --grid-color: rgba(107, 138, 153, 0.03);
   
-  --cyan-primary: #00f0ff;
-  --cyan-glow: rgba(0, 240, 255, 0.35);
-  --cyan-muted: #5ce1e6;
+  --cyan-primary: #6b8a99;
+  --cyan-glow: rgba(107, 138, 153, 0.15);
+  --cyan-muted: #4a6775;
   
   --pink-accent: #ff2a70;
   
@@ -80,7 +80,7 @@ html, body {
   transform: translate(-50%, -50%);
   width: 900px;
   height: 600px;
-  background: radial-gradient(circle, rgba(0, 240, 255, 0.06) 0%, rgba(7, 11, 16, 0) 70%);
+  background: radial-gradient(circle, rgba(107, 138, 153, 0.05) 0%, rgba(7, 11, 16, 0) 70%);
   pointer-events: none;
   z-index: 0;
 }
@@ -127,10 +127,10 @@ html, body {
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+    box-shadow: 0 0 10px rgba(107, 138, 153, 0.15);
   }
   50% {
-    box-shadow: 0 0 25px rgba(0, 240, 255, 0.45);
+    box-shadow: 0 0 18px rgba(107, 138, 153, 0.25);
   }
 }
 

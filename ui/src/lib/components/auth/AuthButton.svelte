@@ -67,25 +67,25 @@
   }
 
   .auth-btn--primary {
-    background: linear-gradient(135deg, #00f0ff, #0090a8);
-    color: #070b10;
-    box-shadow: 0 4px 20px rgba(0, 240, 255, 0.25);
+    background: linear-gradient(135deg, #6b8a99, #4a6775);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   }
 
   .auth-btn--primary:not(:disabled):hover {
-    box-shadow: 0 6px 30px rgba(0, 240, 255, 0.4);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   }
 
   .auth-btn--secondary {
     background: transparent;
-    border: 1px solid rgba(0, 240, 255, 0.25);
+    border: 1px solid rgba(107, 138, 153, 0.25);
     color: var(--cyan-muted);
   }
 
   .auth-btn--secondary:not(:disabled):hover {
     border-color: var(--cyan-primary);
     color: var(--cyan-primary);
-    box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   }
 
   /* ─── Light Mode Overrides (Same style as Browse/Upload File button) ─── */

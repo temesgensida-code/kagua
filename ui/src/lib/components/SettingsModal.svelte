@@ -206,11 +206,11 @@
 
   .modal-card {
     background: #0d1724;
-    border: 1px solid rgba(0, 240, 255, 0.25);
+    border: 1px solid rgba(107, 138, 153, 0.25);
     border-radius: 6px;
     width: 90%;
     max-width: 480px;
-    box-shadow: 0 0 30px rgba(0, 240, 255, 0.15);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -222,7 +222,7 @@
     justify-content: space-between;
     padding: 0.9rem 1.2rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(0, 240, 255, 0.03);
+    background: rgba(107, 138, 153, 0.04);
   }
 
   .modal-title-row {
@@ -292,7 +292,7 @@
     width: 100%;
     padding: 9px 36px 9px 12px;
     background: rgba(4, 12, 22, 0.9);
-    border: 1px solid rgba(0, 240, 255, 0.2);
+    border: 1px solid rgba(107, 138, 153, 0.25);
     border-radius: 4px;
     color: #ffffff;
     font-family: var(--font-mono);
@@ -303,7 +303,7 @@
 
   .text-input:focus {
     border-color: var(--cyan-primary);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+    box-shadow: 0 0 6px rgba(107, 138, 153, 0.25);
   }
 
   .btn-toggle-eye {
@@ -325,7 +325,7 @@
     width: 100%;
     padding: 9px 12px;
     background: rgba(4, 12, 22, 0.9);
-    border: 1px solid rgba(0, 240, 255, 0.2);
+    border: 1px solid rgba(107, 138, 153, 0.25);
     border-radius: 4px;
     color: #ffffff;
     font-family: var(--font-mono);
@@ -429,7 +429,7 @@
 
   .btn-primary:hover {
     background: #1c3f48;
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
   /* Light theme overrides */

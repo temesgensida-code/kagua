@@ -142,7 +142,7 @@
     color: var(--cyan-primary);
     letter-spacing: 0.18em;
     margin: 0;
-    text-shadow: 0 0 30px rgba(0, 240, 255, 0.4);
+    text-shadow: none;
   }
 
   .brand-sub {
@@ -206,9 +206,9 @@
     justify-content: center;
     font-size: 1.5rem;
     font-weight: 700;
-    background: rgba(0, 240, 255, 0.1);
+    background: rgba(107, 138, 153, 0.15);
     color: var(--cyan-primary);
     border: 2px solid var(--cyan-primary);
-    box-shadow: 0 0 20px rgba(0, 240, 255, 0.25);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
   }
 </style>

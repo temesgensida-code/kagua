@@ -27,6 +27,25 @@
   let isDragging = $state(false);
   let fileInput: HTMLInputElement;
 
+  let friendlyStageMessage = $derived.by(() => {
+    if (!currentStageMessage) return "working...";
+    const msgUpper = currentStageMessage.toUpperCase();
+
+    if (msgUpper.includes("COMPLETED") || msgUpper.includes("READY")) {
+      return "ready";
+    }
+    if (
+      msgUpper.includes("PROLOG") ||
+      msgUpper.includes("REASONING") ||
+      msgUpper.includes("OFFSET") ||
+      msgUpper.includes("MAPPING") ||
+      msgUpper.includes("FACTS")
+    ) {
+      return "on the way...";
+    }
+    return "working...";
+  });
+
   function handleDragOver(e: DragEvent) {
     e.preventDefault();
     isDragging = true;
@@ -81,25 +100,11 @@
       class="hidden-input"
     />
 
-    <!-- Real-time WebSocket Scanning Progress Overlay -->
+    <!-- Real-time Scanning HUD: Clean Spinner & Friendly Message -->
     {#if isScanning}
-      <div class="scan-laser"></div>
       <div class="scanning-hud">
         <div class="spinner"></div>
-        <span class="scan-stage"
-          >{currentStageMessage ||
-            "CONNECTING TO RUST ANALYSIS PIPELINE..."}</span
-        >
-
-        <!-- Step-by-Step Progress Events Log -->
-        <div class="progress-log">
-          {#each progressEvents.slice(-4) as evt}
-            <div class="log-line">
-              <span class="log-stage">[{evt.stage}]</span>
-              <span class="log-msg">{evt.message}</span>
-            </div>
-          {/each}
-        </div>
+        <span class="scan-stage">{friendlyStageMessage}</span>
       </div>
     {/if}
 
@@ -113,21 +118,21 @@
         >
           <path
             d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z"
-            stroke="#00f0ff"
+            stroke="#6b8a99"
             stroke-width="1.8"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
           <path
             d="M14 2V8H20"
-            stroke="#00f0ff"
+            stroke="#6b8a99"
             stroke-width="1.8"
             stroke-linecap="round"
             stroke-linejoin="round"
           />
           <path
             d="M12 17V11M12 11L9.5 13.5M12 11L14.5 13.5"
-            stroke="#00f0ff"
+            stroke="#6b8a99"
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
@@ -283,51 +288,26 @@
     transform: translateY(-2px) scale(1.02);
   }
 
-  /* Scan Laser Animation */
-  .scan-laser {
-    position: absolute;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      var(--cyan-primary) 50%,
-      transparent 100%
-    );
-    box-shadow:
-      0 0 15px var(--cyan-primary),
-      0 0 30px var(--cyan-primary);
-    animation: scanline 1.8s ease-in-out infinite alternate;
-    z-index: 5;
-  }
-
-  @keyframes scanline {
-    0% {
-      top: 5%;
-    }
-    100% {
-      top: 95%;
-    }
-  }
-
   .scanning-hud {
     position: absolute;
+    inset: 0;
     z-index: 6;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    max-width: 90%;
+    justify-content: center;
+    gap: 1rem;
+    background: rgba(8, 15, 24, 0.92);
+    backdrop-filter: blur(4px);
   }
 
   .spinner {
     width: 36px;
     height: 36px;
-    border: 3px solid rgba(0, 240, 255, 0.2);
-    border-top-color: var(--cyan-primary);
+    border: 3px solid rgba(107, 138, 153, 0.2);
+    border-top-color: #6b8a99;
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.9s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;
   }
 
   @keyframes spin {
@@ -338,40 +318,13 @@
 
   .scan-stage {
     font-family: var(--font-mono);
-    font-size: 0.82rem;
-    font-weight: 700;
-    letter-spacing: 2px;
-    color: var(--cyan-primary);
-    text-shadow: 0 0 10px rgba(0, 240, 255, 0.8);
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: #a0b3c2;
+    text-shadow: none;
     text-align: center;
-  }
-
-  .progress-log {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    background: rgba(4, 8, 14, 0.85);
-    border: 1px solid rgba(0, 240, 255, 0.2);
-    border-radius: 4px;
-    padding: 8px 14px;
-    max-width: 500px;
-  }
-
-  .log-line {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .log-stage {
-    color: var(--cyan-primary);
-    font-weight: 700;
-  }
-
-  .log-msg {
-    color: var(--text-muted);
+    text-transform: lowercase;
   }
 
   /* Sample Download Bar */
@@ -388,7 +341,7 @@
     gap: 6px;
     padding: 5px 12px;
     background: rgba(14, 25, 38, 0.85);
-    border: 1px solid rgba(0, 240, 255, 0.25);
+    border: 1px solid rgba(107, 138, 153, 0.25);
     border-radius: 5px;
     color: var(--cyan-primary);
     font-family: var(--font-mono);
@@ -401,10 +354,10 @@
   }
 
   .sample-download-btn:hover {
-    background: rgba(0, 240, 255, 0.12);
+    background: rgba(107, 138, 153, 0.12);
     border-color: var(--cyan-primary);
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(0, 240, 255, 0.2);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.25);
   }
 
   .sample-dl-text {
@@ -416,7 +369,7 @@
     font-weight: 800;
     padding: 1px 5px;
     border-radius: 3px;
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(107, 138, 153, 0.15);
     color: var(--cyan-primary);
     letter-spacing: 0.5px;
   }
@@ -526,11 +479,6 @@
       padding: 4px 10px;
       font-size: 0.64rem;
       flex-wrap: wrap;
-    }
-
-    .progress-log {
-      max-width: 100%;
-      padding: 6px 10px;
     }
   }
 </style>

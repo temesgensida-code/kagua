@@ -21,7 +21,7 @@
     position: absolute;
     inset: -1px;
     border-radius: 14px;
-    background: linear-gradient(135deg, rgba(0,240,255,0.25), rgba(255,42,112,0.08));
+    background: linear-gradient(135deg, rgba(107, 138, 153, 0.2), rgba(255, 42, 112, 0.05));
     z-index: 0;
     pointer-events: none;
   }
@@ -30,7 +30,7 @@
     position: relative;
     z-index: 1;
     background: var(--bg-panel);
-    border: 1px solid rgba(0, 240, 255, 0.14);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     border-radius: 14px;
     padding: 2.5rem 2rem;
     backdrop-filter: blur(20px);

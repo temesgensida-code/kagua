@@ -24,7 +24,7 @@
     score <= 1 ? '#ff2a70' :
     score <= 2 ? '#f59e0b' :
     score <= 3 ? '#6ee7b7' :
-    '#00f0ff'
+    '#6b8a99'
   );
 </script>
 

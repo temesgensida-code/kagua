@@ -16,7 +16,7 @@
       subtitle: 'Dynamic RAG Dispatcher',
       description: 'Intelligent automatic domain routing based on document text & spaCy NER clause detection',
       icon: Cpu,
-      accent: '#00f0ff',
+      accent: '#6b8a99',
       badge: 'RECOMMENDED'
     },
     {
@@ -154,14 +154,14 @@
 
   .domain-card-btn:hover {
     background: rgba(19, 46, 53, 0.4);
-    border-color: rgba(0, 240, 255, 0.3);
+    border-color: rgba(107, 138, 153, 0.3);
     transform: translateY(-2px);
   }
 
   .domain-card-btn.active {
     background: rgba(13, 34, 48, 0.95);
     border-color: var(--accent-color);
-    box-shadow: 0 0 16px rgba(0, 240, 255, 0.15), inset 0 0 12px rgba(0, 240, 255, 0.05);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   }
 
   .card-top {
@@ -183,7 +183,7 @@
   }
 
   .domain-card-btn.active .icon-wrap {
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(107, 138, 153, 0.15);
     color: var(--accent-color);
   }
 
@@ -202,7 +202,7 @@
   .domain-card-btn.active .domain-badge {
     color: var(--accent-color);
     border-color: var(--accent-color);
-    background: rgba(0, 240, 255, 0.1);
+    background: rgba(107, 138, 153, 0.1);
   }
 
   .domain-info {

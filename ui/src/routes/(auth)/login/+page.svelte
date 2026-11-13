@@ -157,7 +157,7 @@
     color: var(--cyan-primary);
     letter-spacing: 0.18em;
     margin: 0;
-    text-shadow: 0 0 30px rgba(0, 240, 255, 0.4);
+    text-shadow: none;
   }
 
   .brand-sub {

@@ -125,7 +125,7 @@
 
   .logout-btn {
     background: none;
-    border: 1px solid rgba(0, 240, 255, 0.18);
+    border: 1px solid rgba(107, 138, 153, 0.22);
     border-radius: 4px;
     color: var(--text-muted);
     font-family: var(--font-mono);

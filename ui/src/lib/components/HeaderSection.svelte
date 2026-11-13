@@ -221,7 +221,7 @@
     font-weight: 600;
     letter-spacing: 2.5px;
     color: var(--cyan-primary);
-    text-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+    text-shadow: none;
     text-transform: uppercase;
   }
 
@@ -245,7 +245,7 @@
     font-weight: 800;
     letter-spacing: 4px;
     color: #ffffff;
-    text-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+    text-shadow: none;
   }
 
   /* Description + Domain Master Buttons Row */
@@ -370,7 +370,7 @@
     justify-content: space-between;
     width: 100%;
     background: rgba(13, 23, 36, 0.7);
-    border: 1px solid rgba(0, 240, 255, 0.15);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     border-radius: 6px;
     padding: 6px 12px;
     cursor: pointer;
@@ -381,7 +381,7 @@
 
   .frameworks-dropdown-btn:hover {
     background: rgba(19, 46, 53, 0.4);
-    border-color: rgba(0, 240, 255, 0.3);
+    border-color: rgba(107, 138, 153, 0.4);
   }
 
   .frameworks-label {

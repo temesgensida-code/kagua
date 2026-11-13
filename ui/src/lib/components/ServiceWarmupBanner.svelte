@@ -72,7 +72,7 @@
 
     /* glassmorphism card */
     background: rgba(8, 12, 20, 0.85);
-    border: 1px solid rgba(0, 240, 255, 0.18);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-radius: 10px;
@@ -81,14 +81,14 @@
     font-family: var(--font-mono, 'JetBrains Mono', monospace);
     font-size: 0.72rem;
     color: rgba(200, 220, 255, 0.7);
-    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 240, 255, 0.05);
+    box-shadow: 0 6px 32px rgba(0, 0, 0, 0.45);
 
     animation: warmup-slide-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
   /* ── state colours ─────────────────────────────────────────── */
   .state-warming {
-    border-color: rgba(0, 200, 255, 0.22);
+    border-color: rgba(107, 138, 153, 0.3);
   }
 
   .state-ready {
