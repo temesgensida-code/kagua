@@ -26,6 +26,7 @@ pub struct AppState {
     pub from_name: String,
     pub frontend_url: String,
     pub ws_state: std::sync::Arc<crate::ws::WsState>,
+    pub http_client: reqwest::Client,
 }
 
 

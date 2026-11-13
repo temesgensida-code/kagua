@@ -132,17 +132,30 @@ export async function analyzeDocument(
     formData.append('ai_enabled', 'false');
   }
 
-  const response = await fetchWithAuth(`${API_BASE}/analyze`, {
-    method: 'POST',
-    body: formData,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Analysis failed (${response.status}): ${errorText}`);
+  try {
+    const response = await fetchWithAuth(`${API_BASE}/analyze`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Analysis failed (${response.status}): ${errorText}`);
+    }
+
+    return response.json();
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Analysis timed out after 120 seconds. If services are waking from standby, please retry.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 export async function downloadPdfAuditReport(report: AnalysisReport): Promise<void> {
@@ -170,31 +183,57 @@ export async function downloadPdfAuditReport(report: AnalysisReport): Promise<vo
 }
 
 export function subscribeProgress(onProgress: (event: ProgressEvent) => void): () => void {
-  try {
-    const socket = new WebSocket(WS_BASE);
+  let isClosed = false;
+  let socket: WebSocket | null = null;
+  let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+  let retryCount = 0;
 
-    socket.onmessage = (event) => {
-      try {
-        const parsed: ProgressEvent = JSON.parse(event.data);
-        onProgress(parsed);
-      } catch (err) {
-        console.error('Failed to parse WS message:', err);
+  function connect() {
+    if (isClosed) return;
+    try {
+      socket = new WebSocket(WS_BASE);
+
+      socket.onopen = () => {
+        retryCount = 0;
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const parsed: ProgressEvent = JSON.parse(event.data);
+          onProgress(parsed);
+        } catch (err) {
+          console.error('Failed to parse WS message:', err);
+        }
+      };
+
+      socket.onerror = (err) => {
+        console.warn('WebSocket connection error:', err);
+      };
+
+      socket.onclose = () => {
+        if (!isClosed) {
+          const delay = Math.min(1000 * Math.pow(1.5, retryCount) + Math.random() * 500, 15000);
+          retryCount++;
+          reconnectTimeout = setTimeout(connect, delay);
+        }
+      };
+    } catch (err) {
+      console.warn('WebSocket subscription failed:', err);
+      if (!isClosed) {
+        reconnectTimeout = setTimeout(connect, 3000);
       }
-    };
-
-    socket.onerror = (err) => {
-      console.warn('WebSocket connection error:', err);
-    };
-
-    return () => {
-      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-        socket.close();
-      }
-    };
-  } catch (err) {
-    console.warn('WebSocket subscription failed:', err);
-    return () => {};
+    }
   }
+
+  connect();
+
+  return () => {
+    isClosed = true;
+    if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+      socket.close();
+    }
+  };
 }
 
 export async function fetchReports(limit: number = 20, offset: number = 0): Promise<ListReportsResponse> {

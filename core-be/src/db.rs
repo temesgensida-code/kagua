@@ -3,12 +3,45 @@ use tracing::info;
 
 /// Initialize the PostgreSQL connection pool and run all SQL migrations.
 pub async fn init_db(database_url: &str) -> PgPool {
-    info!("Connecting to PostgreSQL database...");
-    let pool = PgPoolOptions::new()
-        .max_connections(10)
-        .connect(database_url)
-        .await
-        .expect("Failed to connect to PostgreSQL. Check DATABASE_URL in .env");
+    info!("Connecting to PostgreSQL database with exponential retry...");
+    let mut attempts = 0;
+    let max_attempts = 5;
+    let mut delay = std::time::Duration::from_secs(1);
+
+    let pool = loop {
+        attempts += 1;
+        match PgPoolOptions::new()
+            .max_connections(10)
+            .min_connections(2)
+            .acquire_timeout(std::time::Duration::from_secs(15))
+            .idle_timeout(std::time::Duration::from_secs(300))
+            .max_lifetime(std::time::Duration::from_secs(1800))
+            .connect(database_url)
+            .await
+        {
+            Ok(p) => {
+                info!("PostgreSQL connected successfully on attempt {}", attempts);
+                break p;
+            }
+            Err(e) if attempts < max_attempts => {
+                tracing::warn!(
+                    "DB connect attempt {}/{} failed: {}. Retrying in {:?}...",
+                    attempts,
+                    max_attempts,
+                    e,
+                    delay
+                );
+                tokio::time::sleep(delay).await;
+                delay *= 2;
+            }
+            Err(e) => {
+                panic!(
+                    "Fatal: Failed to connect to PostgreSQL after {} attempts: {}. Check DATABASE_URL in .env",
+                    attempts, e
+                );
+            }
+        }
+    };
 
     info!("Running database migrations...");
     sqlx::raw_sql(include_str!("../migrations/001_create_users.sql"))

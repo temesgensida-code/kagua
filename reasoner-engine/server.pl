@@ -54,44 +54,48 @@
 
 handle_reason(Request) :-
     cors_enable(Request, [methods([post])]),
-    http_read_json_dict(Request, Body, []),
-    %% Extract domain specification
-    ( get_dict(domain, Body, DomainRaw) -> true ; DomainRaw = all ),
-    %% Extract facts dict
-    ( get_dict(facts, Body, FactsDict) -> true ; FactsDict = _{}  ),
+    catch(
+        (
+            http_read_json_dict(Request, Body, []),
+            %% Extract domain specification
+            ( get_dict(domain, Body, DomainRaw) -> true ; DomainRaw = all ),
+            %% Extract facts dict
+            ( get_dict(facts, Body, FactsDict) -> true ; FactsDict = _{}  ),
 
-    %% Convert domain spec
-    parse_domain_spec(DomainRaw, DomainSpec),
+            %% Convert domain spec
+            parse_domain_spec(DomainRaw, DomainSpec),
 
-    %% Convert JSON dict to Key-Value pair list for the engine
-    dict_to_fact_pairs(FactsDict, FactPairs),
+            %% Convert JSON dict to Key-Value pair list for the engine
+            dict_to_fact_pairs(FactsDict, FactPairs),
 
-    %% Run the reasoning engine
-    ( find_violations(DomainSpec, FactPairs, Violations)
-    -> true
-    ;  Violations = []
-    ),
+            %% Run the reasoning engine
+            ( find_violations(DomainSpec, FactPairs, Violations)
+            -> true
+            ;  Violations = []
+            ),
 
-    %% Convert violation dicts to JSON-safe dicts
-    maplist(violation_to_json, Violations, JsonViolations),
-    length(JsonViolations, Count),
+            %% Convert violation dicts to JSON-safe dicts
+            maplist(violation_to_json, Violations, JsonViolations),
+            length(JsonViolations, Count),
 
-    %% Respond
-    reply_json_dict(
-        _{
-            status: ok,
-            domain: DomainRaw,
-            violations_count: Count,
-            violations: JsonViolations
-        }
-    ).
-
-%% Error fallback
-handle_reason(Request) :-
-    cors_enable(Request, [methods([post])]),
-    reply_json_dict(
-        _{ status: error, message: "Failed to process reasoning request." },
-        [status(500)]
+            %% Respond
+            reply_json_dict(
+                _{
+                    status: ok,
+                    domain: DomainRaw,
+                    violations_count: Count,
+                    violations: JsonViolations
+                }
+            )
+        ),
+        Error,
+        (
+            print_message(warning, Error),
+            reply_json_dict(
+                _{ status: error, message: "Failed to process reasoning request." },
+                [status(500)]
+            )
+        )
     ).
 
 %% ---------------------------------------------------------------------------

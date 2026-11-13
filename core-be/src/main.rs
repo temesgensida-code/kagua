@@ -11,7 +11,7 @@ mod ws;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use axum::{
-    extract::{Multipart, State},
+    extract::{DefaultBodyLimit, Multipart, State},
     http::{header, HeaderMap, StatusCode},
 
     response::{IntoResponse, Json},
@@ -58,6 +58,14 @@ async fn main() {
 
     let ws_state = Arc::new(WsState::new());
 
+    let http_client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(90))
+        .pool_idle_timeout(std::time::Duration::from_secs(90))
+        .tcp_keepalive(std::time::Duration::from_secs(30))
+        .build()
+        .expect("Failed to build HTTP client");
+
     // Build shared application state
     let app_state = AppState {
         db,
@@ -67,6 +75,7 @@ async fn main() {
         from_name,
         frontend_url,
         ws_state: ws_state.clone(),
+        http_client,
     };
 
     let cors = if let Ok(frontend_url_str) = std::env::var("FRONTEND_URL") {
@@ -100,6 +109,8 @@ async fn main() {
     // ── Main application ──────────────────────────────────────────────────
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/health/live", get(health_check))
+        .route("/health/ready", get(readiness_check))
         // Public warm-up endpoint — pings parser & reasoner, no JWT required
         .route("/warmup", get(warmup_handler))
         .route("/ws", get(ws_handler))
@@ -110,6 +121,7 @@ async fn main() {
         .route("/reports/:id", get(report_handlers::get_report).delete(report_handlers::delete_report))
         // Auth routes mounted under /auth
         .nest("/auth", auth_router)
+        .layer(DefaultBodyLimit::max(25 * 1024 * 1024))
         .layer(cors)
         .with_state(app_state);
 
@@ -126,8 +138,35 @@ async fn main() {
         .expect("Failed to bind TCP listener");
 
     axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
         .await
         .expect("Axum server error");
+}
+
+async fn shutdown_signal() {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {},
+        _ = terminate => {},
+    }
+
+    info!("Signal received, starting graceful shutdown of Kagua Core Backend...");
 }
 
 async fn health_check() -> Json<serde_json::Value> {
@@ -139,6 +178,57 @@ async fn health_check() -> Json<serde_json::Value> {
             .unwrap_or_default()
             .as_secs()
     }))
+}
+
+async fn readiness_check(
+    State(state): State<AppState>,
+) -> (StatusCode, Json<serde_json::Value>) {
+    let db_ok = sqlx::query("SELECT 1")
+        .execute(&state.db)
+        .await
+        .is_ok();
+
+    let parser_base = std::env::var("PARSER_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
+    let parser_url = format!("{}/health", parser_base.trim_end_matches('/'));
+
+    let reasoner_base = std::env::var("REASONER_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8081".to_string());
+    let reasoner_url = format!("{}/health", reasoner_base.trim_end_matches('/'));
+
+    let (parser_res, reasoner_res) = tokio::join!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), state.http_client.get(&parser_url).send()),
+        tokio::time::timeout(std::time::Duration::from_secs(3), state.http_client.get(&reasoner_url).send()),
+    );
+
+    let parser_ok = parser_res
+        .ok()
+        .and_then(|r| r.ok())
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    let reasoner_ok = reasoner_res
+        .ok()
+        .and_then(|r| r.ok())
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    let ready = db_ok && parser_ok && reasoner_ok;
+    let status = if ready { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+
+    (
+        status,
+        Json(serde_json::json!({
+            "status": if ready { "ready" } else { "degraded" },
+            "database": db_ok,
+            "parser": parser_ok,
+            "reasoner": reasoner_ok,
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        }))
+    )
 }
 
 async fn analyze_handler(
@@ -200,7 +290,7 @@ async fn analyze_handler(
     let document_hash = format!("{:x}", hasher.finalize());
 
     let report = process_analysis_pipeline(
-        filename, content_type, bytes, domain_spec, ai_params, &state.ws_state
+        filename, content_type, bytes, domain_spec, ai_params, &state.ws_state, &state.http_client
     ).await?;
 
     let compliance_score = (100.0 - (report.critical_count as f64 * 15.0 + report.warning_count as f64 * 5.0)).max(0.0);

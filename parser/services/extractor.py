@@ -2,30 +2,37 @@ import io
 from fastapi import HTTPException, status
 import pypdf
 import docx
+import gc
 
 # Minimum characters required from pypdf extraction before OCR fallback is triggered.
 # Scanned PDFs typically return 0-50 chars of garbage or nothing at all.
 MIN_TEXT_THRESHOLD = 100
+MAX_OCR_PAGES = 35
 
 
-def _ocr_pdf_bytes(stream_bytes: bytes) -> str:
+def _ocr_pdf_bytes(stream_bytes: bytes, max_pages: int = MAX_OCR_PAGES) -> str:
     """
-    OCR Fallback: Rasterize each PDF page using pdf2image (Poppler) and run
+    OCR Fallback: Rasterize each PDF page using pdf2image (Poppler) at 150 DPI and run
     Tesseract OCR over each page image.
 
     - Zero disk writes: all processing happens in RAM via BytesIO.
+    - Capped at max_pages (default 35) to prevent OOM on massive scanned PDFs.
+    - Explicit page-by-page deallocation and garbage collection.
     - Gracefully degrades to empty string if OCR dependencies are missing.
     """
     try:
         from pdf2image import convert_from_bytes
         import pytesseract
 
-        images = convert_from_bytes(stream_bytes, dpi=250)
+        images = convert_from_bytes(stream_bytes, dpi=150, first_page=1, last_page=max_pages)
         pages_text = []
         for img in images:
             page_text = pytesseract.image_to_string(img, lang="eng")
             if page_text.strip():
                 pages_text.append(page_text.strip())
+            del img
+        del images
+        gc.collect()
         return "\n\n".join(pages_text)
     except ImportError:
         # OCR libraries not available — silent degradation

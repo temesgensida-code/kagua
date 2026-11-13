@@ -21,9 +21,10 @@
 %% doc_fact/2 is the dynamic predicate populated from incoming JSON.
 %% Each fact has the shape:  doc_fact(Key, Value).
 %%
-%% IMPORTANT: declared in module 'user' so that domain rule modules
-%% (which reference doc_fact/2 unqualified) can resolve it.
-:- dynamic user:doc_fact/2.
+%% IMPORTANT: declared thread_local in module 'user' so that domain rule modules
+%% (which reference doc_fact/2 unqualified) can resolve it, and concurrent HTTP
+%% worker threads do not overwrite or retract each other's facts.
+:- thread_local user:doc_fact/2.
 
 %% Track which domain modules are currently loaded.
 :- dynamic loaded_domain/1.
@@ -139,40 +140,30 @@ retract_all_facts :-
 %%   6. Clean up asserted facts.
 
 find_violations(DomainsSpec, Facts, Violations) :-
-    %% 1. Clean previous state
-    retract_all_facts,
-
-    %% 2. Assert incoming facts
-    assert_facts(Facts),
-
-    %% 3. Resolve domain list
-    resolve_domains(DomainsSpec, Domains),
-
-    %% 4. Ensure domains are loaded
-    load_domains(Domains),
-
-    %% 5. Collect violations via backtracking with module-qualified calls
-    findall(
-        violation{domain: Domain, rule: Rule, title: Title,
-                  severity: Sev, description: Desc, recommendation: Rec},
+    setup_call_cleanup(
+        ( retract_all_facts, assert_facts(Facts) ),
         (
-            member(Domain, Domains),
-            domain_module(Domain, Mod),
-            Mod:check_violation(Domain, V),
-            get_dict(rule, V, Rule),
-            get_dict(title, V, Title),
-            get_dict(severity, V, Sev),
-            get_dict(description, V, Desc),
-            get_dict(recommendation, V, Rec)
+            resolve_domains(DomainsSpec, Domains),
+            load_domains(Domains),
+            findall(
+                violation{domain: Domain, rule: Rule, title: Title,
+                          severity: Sev, description: Desc, recommendation: Rec},
+                (
+                    member(Domain, Domains),
+                    domain_module(Domain, Mod),
+                    Mod:check_violation(Domain, V),
+                    get_dict(rule, V, Rule),
+                    get_dict(title, V, Title),
+                    get_dict(severity, V, Sev),
+                    get_dict(description, V, Desc),
+                    get_dict(recommendation, V, Rec)
+                ),
+                ViolationsRaw
+            ),
+            sort(ViolationsRaw, Violations)
         ),
-        ViolationsRaw
-    ),
-
-    %% 6. Deduplicate
-    sort(ViolationsRaw, Violations),
-
-    %% 7. Clean up
-    retract_all_facts.
+        retract_all_facts
+    ).
 
 %% resolve_domains(+Spec, -DomainList)
 resolve_domains(all, Domains) :-

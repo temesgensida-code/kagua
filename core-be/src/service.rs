@@ -16,6 +16,7 @@ pub async fn process_analysis_pipeline(
     domain_spec: Value,
     ai_params: AIParams,
     ws_state: &WsState,
+    client: &reqwest::Client,
 ) -> Result<AnalysisReport, (axum::http::StatusCode, String)> {
     let parser_base = std::env::var("PARSER_URL")
         .unwrap_or_else(|_| "http://127.0.0.1:8000".to_string());
@@ -58,48 +59,74 @@ pub async fn process_analysis_pipeline(
         fastapi_parse_url.clone()
     };
 
-    let client = reqwest::Client::new();
-    let mut part = Part::bytes(secure_bytes.as_slice().to_vec()).file_name(filename.clone());
-    if let Some(ref mime) = content_type {
-        if let Ok(p) = Part::bytes(secure_bytes.as_slice().to_vec())
-            .file_name(filename.clone())
-            .mime_str(mime)
-        {
-            part = p;
+    let mut p_attempts = 0;
+    let p_max_attempts = 3;
+    let mut p_delay = std::time::Duration::from_secs(2);
+
+    let parse_res = loop {
+        p_attempts += 1;
+        let mut part = Part::bytes(secure_bytes.as_slice().to_vec()).file_name(filename.clone());
+        if let Some(ref mime) = content_type {
+            if let Ok(p) = Part::bytes(secure_bytes.as_slice().to_vec())
+                .file_name(filename.clone())
+                .mime_str(mime)
+            {
+                part = p;
+            }
         }
-    }
-
-    let form = Form::new().part("file", part);
-
-    let parse_res = client
-        .post(&parse_url)
-        .multipart(form)
-        .send()
-        .await
-        .map_err(|e| {
-            error!("Failed to connect to FastAPI parser: {}", e);
-            (
-                axum::http::StatusCode::BAD_GATEWAY,
-                format!("FastAPI parser connection failed: {}", e),
-            )
-        })?;
-
-    if !parse_res.status().is_success() {
-        let status_code = parse_res.status();
-        let err_text = parse_res.text().await.unwrap_or_default();
-        error!("FastAPI parser error ({}): {}", status_code, err_text);
-
-        let user_msg = if err_text.contains("<html") || status_code == reqwest::StatusCode::BAD_GATEWAY {
-            "FastAPI parser service is offline or waking up from sleep on Render. Please wait 30 seconds and try again.".to_string()
-        } else {
-            format!("FastAPI document parsing failed: {}", err_text)
-        };
-
-        return Err((
-            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
-            user_msg,
-        ));
-    }
+        let form = Form::new().part("file", part);
+        match client.post(&parse_url).multipart(form).send().await {
+            Ok(resp) if resp.status().is_success() => break resp,
+            Ok(resp)
+                if p_attempts < p_max_attempts
+                    && (resp.status().is_server_error()
+                        || resp.status() == reqwest::StatusCode::BAD_GATEWAY) =>
+            {
+                let status = resp.status();
+                tracing::warn!(
+                    "FastAPI parser returned {}. Retrying attempt {}/{} in {:?}...",
+                    status,
+                    p_attempts,
+                    p_max_attempts,
+                    p_delay
+                );
+                ws_state.broadcast_progress(
+                    "DOWNSTREAM_WARMUP",
+                    &format!(
+                        "FastAPI parser is waking up (status {}), retrying in {:?}...",
+                        status, p_delay
+                    ),
+                    None,
+                );
+                tokio::time::sleep(p_delay).await;
+                p_delay *= 2;
+            }
+            Ok(resp) => break resp,
+            Err(e) if p_attempts < p_max_attempts => {
+                tracing::warn!(
+                    "FastAPI parser connect attempt {}/{} failed: {}. Retrying in {:?}...",
+                    p_attempts,
+                    p_max_attempts,
+                    e,
+                    p_delay
+                );
+                ws_state.broadcast_progress(
+                    "DOWNSTREAM_WARMUP",
+                    &format!("FastAPI parser is waking from standby, retrying in {:?}...", p_delay),
+                    None,
+                );
+                tokio::time::sleep(p_delay).await;
+                p_delay *= 2;
+            }
+            Err(e) => {
+                error!("Final connection failure to FastAPI parser: {}", e);
+                return Err((
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    format!("FastAPI parser connection failed: {}", e),
+                ));
+            }
+        }
+    };
 
     let parser_response: ParserResponse = parse_res.json().await.map_err(|e| {
         error!("Failed to deserialize parser response: {}", e);
@@ -288,18 +315,64 @@ pub async fn process_analysis_pipeline(
         facts,
     };
 
-    let reason_res = client
-        .post(&prolog_reason_url)
-        .json(&reasoner_req)
-        .send()
-        .await
-        .map_err(|e| {
-            error!("Failed to connect to Prolog reasoner: {}", e);
-            (
-                axum::http::StatusCode::BAD_GATEWAY,
-                format!("SWI-Prolog reasoner connection failed: {}", e),
-            )
-        })?;
+    let mut r_attempts = 0;
+    let r_max_attempts = 3;
+    let mut r_delay = std::time::Duration::from_secs(2);
+
+    let reason_res = loop {
+        r_attempts += 1;
+        match client.post(&prolog_reason_url).json(&reasoner_req).send().await {
+            Ok(resp) if resp.status().is_success() => break resp,
+            Ok(resp)
+                if r_attempts < r_max_attempts
+                    && (resp.status().is_server_error()
+                        || resp.status() == reqwest::StatusCode::BAD_GATEWAY) =>
+            {
+                let status = resp.status();
+                tracing::warn!(
+                    "SWI-Prolog reasoner returned {}. Retrying attempt {}/{} in {:?}...",
+                    status,
+                    r_attempts,
+                    r_max_attempts,
+                    r_delay
+                );
+                ws_state.broadcast_progress(
+                    "DOWNSTREAM_WARMUP",
+                    &format!(
+                        "SWI-Prolog reasoner is waking up (status {}), retrying in {:?}...",
+                        status, r_delay
+                    ),
+                    None,
+                );
+                tokio::time::sleep(r_delay).await;
+                r_delay *= 2;
+            }
+            Ok(resp) => break resp,
+            Err(e) if r_attempts < r_max_attempts => {
+                tracing::warn!(
+                    "SWI-Prolog reasoner connect attempt {}/{} failed: {}. Retrying in {:?}...",
+                    r_attempts,
+                    r_max_attempts,
+                    e,
+                    r_delay
+                );
+                ws_state.broadcast_progress(
+                    "DOWNSTREAM_WARMUP",
+                    &format!("SWI-Prolog reasoner is waking from standby, retrying in {:?}...", r_delay),
+                    None,
+                );
+                tokio::time::sleep(r_delay).await;
+                r_delay *= 2;
+            }
+            Err(e) => {
+                error!("Final connection failure to SWI-Prolog reasoner: {}", e);
+                return Err((
+                    axum::http::StatusCode::BAD_GATEWAY,
+                    format!("SWI-Prolog reasoner connection failed: {}", e),
+                ));
+            }
+        }
+    };
 
     if !reason_res.status().is_success() {
         let status_code = reason_res.status();
