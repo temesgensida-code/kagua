@@ -19,7 +19,7 @@ export const AI_MODELS: AIModelOption[] = [
   { id: 'gpt-4.1', name: 'GPT-4.1', provider: 'openai', providerName: 'OpenAI' },
 ];
 
-let enabledState = $state(false);
+let enabledState = $state(true);
 let apiKeyState = $state('');
 let selectedModelIdState = $state('gemini-2.5-flash');
 
