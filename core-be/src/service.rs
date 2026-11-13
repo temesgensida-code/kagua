@@ -75,6 +75,7 @@ pub async fn process_analysis_pipeline(
             }
         }
         let form = Form::new().part("file", part);
+
         match client.post(&parse_url).multipart(form).send().await {
             Ok(resp) if resp.status().is_success() => break resp,
             Ok(resp)
@@ -127,6 +128,23 @@ pub async fn process_analysis_pipeline(
             }
         }
     };
+
+    if !parse_res.status().is_success() {
+        let status_code = parse_res.status();
+        let err_text = parse_res.text().await.unwrap_or_default();
+        error!("FastAPI parser error ({}): {}", status_code, err_text);
+
+        let user_msg = if err_text.contains("<html") || status_code == reqwest::StatusCode::BAD_GATEWAY {
+            "FastAPI parser service is offline or waking up from sleep on Render. Please wait 30 seconds and try again.".to_string()
+        } else {
+            format!("FastAPI document parsing failed: {}", err_text)
+        };
+
+        return Err((
+            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            user_msg,
+        ));
+    }
 
     let parser_response: ParserResponse = parse_res.json().await.map_err(|e| {
         error!("Failed to deserialize parser response: {}", e);
@@ -412,6 +430,7 @@ pub async fn process_analysis_pipeline(
         &reasoner_response.violations,
         &parser_response.clauses,
         &parser_response.entities,
+        parser_response.pages_meta.as_deref(),
         parser_response.retrieved_chunks.as_ref(),
     );
 
@@ -586,12 +605,25 @@ fn safe_char_slice(text: &str, start_char: usize, end_char: usize) -> String {
     text.chars().skip(start).take(end - start).collect()
 }
 
-/// Zero-copy string offset mapping of Prolog violations to exact character slices & statutory citations
+fn resolve_page_number(char_offset: usize, pages_meta: Option<&[crate::models::PageMeta]>) -> Option<usize> {
+    if let Some(pages) = pages_meta {
+        for pm in pages {
+            if char_offset >= pm.start_char && char_offset <= pm.end_char {
+                return Some(pm.page);
+            }
+        }
+        return pages.last().map(|pm| pm.page);
+    }
+    None
+}
+
+/// Zero-copy string offset mapping of Prolog violations to exact character slices, deterministic page numbers & statutory citations
 fn map_violations_to_offsets(
     raw_text: &str,
     violations: &[PrologViolation],
     clauses: &[ClauseSpan],
-    entities: &[EntitySpan],
+    _entities: &[EntitySpan],
+    pages_meta: Option<&[crate::models::PageMeta]>,
     retrieved_chunks: Option<&Value>,
 ) -> Vec<MappedViolation> {
     let mut mapped = Vec::new();
@@ -600,6 +632,18 @@ fn map_violations_to_offsets(
         let mut start_char = None;
         let mut end_char = None;
         let mut snippet_str: Option<String> = None;
+
+        let title_lower = v.title.to_lowercase();
+        let desc_lower = v.description.to_lowercase();
+
+        let is_omission_finding = title_lower.contains("missing")
+            || title_lower.contains("omission")
+            || title_lower.contains("absence")
+            || desc_lower.contains("fails to specify")
+            || desc_lower.contains("does not contain")
+            || desc_lower.contains("absence of")
+            || desc_lower.contains("missing")
+            || v.recommendation.to_lowercase().contains("include a provision");
 
         // Match violations to clause spans (Labour Law & Commercial Code)
         for clause in clauses {
@@ -644,23 +688,16 @@ fn map_violations_to_offsets(
             }
         }
 
-        // Fallback: search entity span
-        if start_char.is_none() {
-            if let Some(ent) = entities.first() {
-                start_char = Some(ent.start_char);
-                end_char = Some(ent.end_char);
-                snippet_str = Some(ent.text.clone());
-            }
-        }
-
-        // Fallback: safe slice of raw_text prefix
-        if start_char.is_none() && !raw_text.is_empty() {
-            let slice = safe_char_slice(raw_text, 0, 200);
-            let char_count = raw_text.chars().count();
-            start_char = Some(0);
-            end_char = Some(200.min(char_count));
-            snippet_str = Some(slice);
-        }
+        let (final_start, final_end, final_snippet, page_number, is_omission) = if is_omission_finding && start_char.is_none() {
+            // Statutory omissions: the clause is completely absent from the contract text
+            (None, None, None, None, Some(true))
+        } else {
+            // Present violation: resolve start/end and map to deterministic page number
+            let s_char = start_char.unwrap_or(0);
+            let e_char = end_char.unwrap_or_else(|| s_char + snippet_str.as_ref().map(|s| s.chars().count()).unwrap_or(0));
+            let resolved_page = resolve_page_number(s_char, pages_meta);
+            (Some(s_char), Some(e_char), snippet_str, resolved_page, Some(false))
+        };
 
         // Attach statutory article citation & exact statutory text
         let (article_citation, statutory_text) = lookup_statutory_citation(&v.rule, retrieved_chunks);
@@ -672,9 +709,11 @@ fn map_violations_to_offsets(
             severity: v.severity.clone(),
             description: v.description.clone(),
             recommendation: v.recommendation.clone(),
-            snippet: snippet_str,
-            start_char,
-            end_char,
+            snippet: final_snippet,
+            start_char: final_start,
+            end_char: final_end,
+            page_number,
+            is_omission,
             article_citation,
             statutory_text,
         });

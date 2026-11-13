@@ -460,15 +460,47 @@ ETHIOPIAN_LABOUR_QUERIES = {
     "dispute_waiver": "appeal dismissal labour board court waive dispute resolution rights Article 138"
 }
 
+ARTICLE_PREFIX_REGEX = re.compile(
+    r"\b(?:article|section|sec|clause|art|proc|proclamation|no)\.?\s*$",
+    re.IGNORECASE
+)
+
+STATUTORY_SANITY_BOUNDS: Dict[str, Tuple[float, float]] = {
+    "probation_days": (1, 180),
+    "working_hours_per_day": (1, 18),
+    "weekly_working_hours": (10, 100),
+    "overtime_hours_per_day": (0, 8),
+    "overtime_hours_per_week": (0, 48),
+    "notice_period_days": (1, 180),
+    "annual_leave_days": (1, 90),
+    "maternity_leave_days": (1, 240),
+    "sick_leave_months": (1, 12),
+    "minimum_worker_age": (14, 75),
+    "contract_suspension_days": (1, 365),
+    "final_settlement_days": (1, 180),
+    "max_wage_deduction_percent": (1, 100),
+}
+
+
+def validate_statutory_bound(key: str, val: float | int) -> bool:
+    bounds = STATUTORY_SANITY_BOUNDS.get(key)
+    if not bounds:
+        return True
+    return bounds[0] <= val <= bounds[1]
+
+
 def extract_number_near_keyword(
-    text: str, keywords: List[str], unit_pattern: str, max_dist: int = 80
+    text: str, keywords: List[str], unit_pattern: str = "", max_dist: int = 80
 ) -> Tuple[int | None, str | None]:
     """
     Extract a number appearing within `max_dist` characters of specified keywords.
-    Uses parse_legal_number() to handle digits, written words, and parenthesized formats.
+    Binds the number strictly to unit_pattern when supplied (e.g. days/hours),
+    and rejects numbers preceded by statutory citations like 'Article 61' or 'Proclamation 1156'.
     Returns (extracted_number, sentence_snippet).
     """
     doc = nlp(text)
+    unit_re = re.compile(unit_pattern, re.IGNORECASE) if unit_pattern else None
+
     for sent in doc.sents:
         sent_text = sent.text.strip()
         sent_lower = sent_text.lower()
@@ -480,10 +512,39 @@ def extract_number_near_keyword(
                     win_start = max(0, kw_idx - max_dist)
                     win_end = min(len(sent_text), kw_idx + len(kw) + max_dist)
                     window = sent_text[win_start:win_end]
-                    # Use legal number parser — handles digits, written words, parenthesized forms
-                    val = parse_legal_number(window)
-                    if val is not None:
-                        return val, sent_text
+
+                    # 1. When a unit_pattern is provided, search for numbers affixed to that unit
+                    if unit_re:
+                        num_pattern = r"\(?\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve|fifteen|eighteen|twenty|twenty-four|thirty|forty|forty-five|forty-eight|fifty|sixty|seventy|seventy-two|eighty|ninety|one\s+hundred)\b\)?\s*(?:\([^)]+\)\s*)?"
+                        for m in re.finditer(num_pattern, window, re.IGNORECASE):
+                            num_str = m.group(1)
+                            pre_start = max(0, m.start() - 25)
+                            prefix = window[pre_start:m.start()].strip()
+                            # Reject statutory prefixes: "Article 61", "Section 14"
+                            if ARTICLE_PREFIX_REGEX.search(prefix):
+                                continue
+
+                            # Check surrounding text for statutory unit
+                            post_window = window[m.end():min(len(window), m.end() + 45)]
+                            pre_window = window[max(0, m.start() - 35):m.start()]
+                            if unit_re.search(post_window) or unit_re.search(pre_window):
+                                val = parse_legal_number(num_str)
+                                if val is not None:
+                                    return val, sent_text
+                    else:
+                        # 2. General fallback: search for number, still rejecting article prefixes
+                        for m in re.finditer(r"\(?\b(\d+)\b\)?", window):
+                            num_str = m.group(1)
+                            pre_start = max(0, m.start() - 25)
+                            prefix = window[pre_start:m.start()].strip()
+                            if ARTICLE_PREFIX_REGEX.search(prefix):
+                                continue
+                            val = int(num_str)
+                            return val, sent_text
+
+                        val = parse_legal_number(window)
+                        if val is not None:
+                            return val, sent_text
     return None, None
 
 
@@ -696,11 +757,66 @@ ANNUAL_LEAVE_DENIED_SYNONYMS = [
 ]
 
 
-def _detect_any_synonym(text_lower: str, synonyms: list) -> str | None:
-    """Returns the first matched synonym string, or None if none matched."""
-    for kw in synonyms:
-        if kw in text_lower:
-            return kw
+PROTECTIVE_PATTERNS = [
+    r"\b(?:does\s+not|do\s+not|will\s+not|shall\s+not)\s+discriminate\b",
+    r"\bwithout\s+(?:regard|distinction)\s+to\b",
+    r"\bprohibited\s+from\s+discriminating\b",
+    r"\bequal\s+opportunity\b",
+    r"\bno\s+employee\s+shall\s+be\s+(?:subjected|discriminated)\b",
+    r"\bprohibits\s+discrimination\b",
+    r"\bfree\s+from\s+discrimination\b",
+    r"\bwithout\s+discrimination\b",
+    r"\bregardless\s+of\b",
+    r"\bnon-discriminat\w*\b",
+]
+
+PROTECTIVE_REGEX = re.compile("|".join(PROTECTIVE_PATTERNS), re.IGNORECASE)
+
+
+def is_protective_or_negated_context(sentence: str) -> bool:
+    """Returns True if the sentence is stating a legal safeguard or prohibition against discrimination."""
+    return bool(PROTECTIVE_REGEX.search(sentence))
+
+
+def classify_document_type(text: str) -> str:
+    """
+    Classifies legal document type based on structural terms.
+    Returns: 'employment_contract' | 'commercial_incorporation' | 'commercial_transaction' | 'general'
+    """
+    text_lower = text.lower()
+    employment_keywords = [
+        "employment", "employee", "employer", "salary", "wages", "probation",
+        "job title", "vacation leave", "work hours", "working days", "job description"
+    ]
+    commercial_keywords = [
+        "articles of association", "memorandum of association", "share company",
+        "private limited company", "subscribers", "founders", "share capital", "commercial registration"
+    ]
+
+    emp_score = sum(1 for kw in employment_keywords if kw in text_lower)
+    comm_score = sum(1 for kw in commercial_keywords if kw in text_lower)
+
+    if emp_score >= 2 and emp_score >= comm_score:
+        return "employment_contract"
+    elif comm_score >= 2:
+        return "commercial_incorporation"
+    return "general"
+
+
+def _detect_any_synonym(raw_text: str, synonyms: list, check_polarity: bool = False) -> str | None:
+    """
+    Returns the first matched synonym string from sentence context.
+    If check_polarity is True, skips sentences that express legal safeguards or non-discrimination.
+    """
+    doc = nlp(raw_text)
+    for sent in doc.sents:
+        sent_text = sent.text.strip()
+        sent_lower = sent_text.lower()
+        if check_polarity and is_protective_or_negated_context(sent_text):
+            continue
+        for kw in synonyms:
+            if kw.lower() in sent_lower:
+                return kw
     return None
 
 
@@ -918,7 +1034,7 @@ def extract_labour_compliance_facts(raw_text: str) -> Dict[str, Any]:
     full_lower = sanitized_text.lower()
 
     # 1. Hiring Discrimination (Articles 14(1)(b-c) & 87)
-    matched = _detect_any_synonym(full_lower, HIRING_DISCRIMINATION_SYNONYMS)
+    matched = _detect_any_synonym(sanitized_text, HIRING_DISCRIMINATION_SYNONYMS, check_polarity=True)
     if matched:
         prolog_facts["hiring_discrimination_detected"] = True
         fact_provenance["hiring_discrimination_detected"] = {
@@ -928,7 +1044,7 @@ def extract_labour_compliance_facts(raw_text: str) -> Dict[str, Any]:
         }
 
     # 2. Pregnancy Discrimination & Mandatory Resignation (Articles 14(1)(b) & 88)
-    matched = _detect_any_synonym(full_lower, PREGNANCY_DISCRIMINATION_SYNONYMS)
+    matched = _detect_any_synonym(sanitized_text, PREGNANCY_DISCRIMINATION_SYNONYMS, check_polarity=True)
     if matched:
         prolog_facts["pregnancy_discrimination_detected"] = True
         fact_provenance["pregnancy_discrimination_detected"] = {
@@ -1328,19 +1444,24 @@ def extract_commercial_code_compliance_facts(raw_text: str) -> Dict[str, Any]:
     fact_provenance: Dict[str, Any] = {}
     full_lower = raw_text.lower()
 
-    # 1. Company Type Detection
+    # 1. Company Type Detection (only if explicit signals exist, never default unknown documents)
+    doc_type = classify_document_type(raw_text)
     if "private limited company" in full_lower or "p.l.c." in full_lower or " plc" in full_lower or "plc " in full_lower:
         comp_type = "plc"
-    elif "share company" in full_lower or "s.c." in full_lower or "share company" in full_lower:
+    elif "share company" in full_lower or "s.c." in full_lower:
+        comp_type = "share_company"
+    elif doc_type == "commercial_incorporation":
         comp_type = "share_company"
     else:
-        comp_type = "share_company"
-    prolog_facts["company_type"] = comp_type
-    fact_provenance["company_type"] = {
-        "value": comp_type,
-        "source_text": f"Detected company type: '{comp_type}'",
-        "article_reference": "Article 174"
-    }
+        comp_type = None
+
+    if comp_type:
+        prolog_facts["company_type"] = comp_type
+        fact_provenance["company_type"] = {
+            "value": comp_type,
+            "source_text": f"Detected company type: '{comp_type}'",
+            "article_reference": "Article 174"
+        }
 
     # 2. Registered Capital & Paid-up Capital
     cap_text = " ".join([c["text"] for c in retrieved_doc_contexts.get("capital", [])]) + " " + raw_text
@@ -1620,7 +1741,15 @@ def extract_rag_compliance_facts(raw_text: str, domain: str = "auto") -> Dict[st
     if dom_clean in ("labour", "ethiopian_labour_proclamation", "employment"):
         return extract_labour_compliance_facts(raw_text)
 
+    doc_type = classify_document_type(raw_text)
+
     if dom_clean == "all":
+        # Strict isolation: Do not cross-pollinate commercial rules onto employment contracts
+        if doc_type == "employment_contract":
+            return extract_labour_compliance_facts(raw_text)
+        elif doc_type == "commercial_incorporation":
+            return extract_commercial_code_compliance_facts(raw_text)
+
         labour_res = extract_labour_compliance_facts(raw_text)
         comm_res = extract_commercial_code_compliance_facts(raw_text)
         merged_facts = {**labour_res["prolog_facts"], **comm_res["prolog_facts"]}
@@ -1636,7 +1765,12 @@ def extract_rag_compliance_facts(raw_text: str, domain: str = "auto") -> Dict[st
             "proclamation_metadata": labour_res["proclamation_metadata"]
         }
 
-    # Auto mode: Use smart clause-weighted domain detection
+    # Auto mode: Use smart clause-weighted domain detection + document classification
+    if doc_type == "employment_contract":
+        return extract_labour_compliance_facts(raw_text)
+    elif doc_type == "commercial_incorporation":
+        return extract_commercial_code_compliance_facts(raw_text)
+
     from services.ner import extract_entities_and_clauses
     ner_res = extract_entities_and_clauses(raw_text)
     suggested = ner_res["summary"].get("suggested_domain", "ethiopian_labour_proclamation")

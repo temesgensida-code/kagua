@@ -33,6 +33,14 @@ pub struct ParseSummary {
     pub detected_jurisdiction: Option<String>,
 }
 
+/// Page metadata mapping page numbers to character offsets in the document
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageMeta {
+    pub page: usize,
+    pub start_char: usize,
+    pub end_char: usize,
+}
+
 /// Full JSON payload returned from FastAPI `/parse`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParserResponse {
@@ -40,6 +48,7 @@ pub struct ParserResponse {
     pub content_type: Option<String>,
     pub text_length: usize,
     pub raw_text: String,
+    pub pages_meta: Option<Vec<PageMeta>>,
     pub entities: Vec<EntitySpan>,
     pub clauses: Vec<ClauseSpan>,
     pub summary: ParseSummary,
@@ -89,6 +98,8 @@ pub struct MappedViolation {
     pub snippet: Option<String>,
     pub start_char: Option<usize>,
     pub end_char: Option<usize>,
+    pub page_number: Option<usize>,
+    pub is_omission: Option<bool>,
     pub article_citation: Option<String>,
     pub statutory_text: Option<String>,
 }

@@ -8,6 +8,8 @@ export interface MappedViolation {
   snippet?: string;
   start_char?: number;
   end_char?: number;
+  page_number?: number;
+  is_omission?: boolean;
   article_citation?: string;
   statutory_text?: string;
 }

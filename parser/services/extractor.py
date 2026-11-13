@@ -2,6 +2,7 @@ import io
 from fastapi import HTTPException, status
 import pypdf
 import docx
+
 import gc
 
 # Minimum characters required from pypdf extraction before OCR fallback is triggered.
@@ -10,7 +11,7 @@ MIN_TEXT_THRESHOLD = 100
 MAX_OCR_PAGES = 35
 
 
-def _ocr_pdf_bytes(stream_bytes: bytes, max_pages: int = MAX_OCR_PAGES) -> str:
+def _ocr_pdf_bytes(stream_bytes: bytes, max_pages: int = MAX_OCR_PAGES) -> tuple[str, list[dict]]:
     """
     OCR Fallback: Rasterize each PDF page using pdf2image (Poppler) at 150 DPI and run
     Tesseract OCR over each page image.
@@ -18,6 +19,7 @@ def _ocr_pdf_bytes(stream_bytes: bytes, max_pages: int = MAX_OCR_PAGES) -> str:
     - Zero disk writes: all processing happens in RAM via BytesIO.
     - Capped at max_pages (default 35) to prevent OOM on massive scanned PDFs.
     - Explicit page-by-page deallocation and garbage collection.
+    - Tracks character offsets per page for deterministic navigation.
     - Gracefully degrades to empty string if OCR dependencies are missing.
     """
     try:
@@ -26,23 +28,30 @@ def _ocr_pdf_bytes(stream_bytes: bytes, max_pages: int = MAX_OCR_PAGES) -> str:
 
         images = convert_from_bytes(stream_bytes, dpi=150, first_page=1, last_page=max_pages)
         pages_text = []
-        for img in images:
+        pages_meta = []
+        curr_offset = 0
+
+        for idx, img in enumerate(images, start=1):
             page_text = pytesseract.image_to_string(img, lang="eng")
-            if page_text.strip():
-                pages_text.append(page_text.strip())
+            clean_text = page_text.strip()
+            pages_text.append(clean_text)
+            start_c = curr_offset
+            end_c = curr_offset + len(clean_text)
+            pages_meta.append({"page": idx, "start_char": start_c, "end_char": end_c})
+            curr_offset = end_c + 2
             del img
         del images
         gc.collect()
-        return "\n\n".join(pages_text)
+        return "\n\n".join(pages_text), pages_meta
     except ImportError:
         # OCR libraries not available — silent degradation
-        return ""
+        return "", []
     except Exception:
         # Tesseract not installed or rasterization failure — silent degradation
-        return ""
+        return "", []
 
 
-def extract_text_from_pdf(stream_bytes: bytes) -> tuple[str, bool]:
+def extract_text_from_pdf(stream_bytes: bytes) -> tuple[str, bool, list[dict]]:
     """
     Extract raw text from PDF bytes in memory.
 
@@ -50,27 +59,34 @@ def extract_text_from_pdf(stream_bytes: bytes) -> tuple[str, bool]:
     Fallback path:  Tesseract OCR via pdf2image (for scanned/image PDFs).
 
     Returns:
-        (text, ocr_used) — text is the extracted content; ocr_used is True
-        when the OCR fallback was triggered.
+        (text, ocr_used, pages_meta) — text is the extracted content; ocr_used is True
+        when the OCR fallback was triggered; pages_meta is a list of page character bounds.
     """
     try:
         reader = pypdf.PdfReader(io.BytesIO(stream_bytes))
         pages_text = []
-        for page in reader.pages:
-            text = page.extract_text()
-            if text:
-                pages_text.append(text)
+        pages_meta = []
+        curr_offset = 0
+
+        for idx, page in enumerate(reader.pages, start=1):
+            text = page.extract_text() or ""
+            pages_text.append(text)
+            start_c = curr_offset
+            end_c = curr_offset + len(text)
+            pages_meta.append({"page": idx, "start_char": start_c, "end_char": end_c})
+            curr_offset = end_c + 2
+
         extracted = "\n\n".join(pages_text)
 
         if len(extracted.strip()) < MIN_TEXT_THRESHOLD:
             # Likely a scanned / image-only PDF — trigger OCR fallback
-            ocr_text = _ocr_pdf_bytes(stream_bytes)
+            ocr_text, ocr_pages_meta = _ocr_pdf_bytes(stream_bytes)
             if ocr_text.strip():
-                return ocr_text, True
+                return ocr_text, True, ocr_pages_meta
             # OCR also returned nothing (truly empty or corrupt) — return best available
-            return extracted, False
+            return extracted, False, pages_meta
 
-        return extracted, False
+        return extracted, False, pages_meta
 
     except Exception as e:
         raise HTTPException(
@@ -116,26 +132,29 @@ def extract_text_from_txt(stream_bytes: bytes) -> str:
         )
 
 
-def extract_document_text(filename: str, content_type: str | None, stream_bytes: bytes) -> tuple[str, bool]:
+def extract_document_text(filename: str, content_type: str | None, stream_bytes: bytes) -> tuple[str, bool, list[dict]]:
     """
     Route document to proper in-memory extractor based on extension and content-type.
 
     Returns:
-        (text, ocr_used) — ocr_used is True only for PDFs processed via OCR fallback.
+        (text, ocr_used, pages_meta) — ocr_used is True only for PDFs processed via OCR fallback;
+        pages_meta contains character boundaries per page.
     """
     lower_filename = filename.lower()
 
     if lower_filename.endswith('.pdf') or content_type == 'application/pdf':
         return extract_text_from_pdf(stream_bytes)
     elif lower_filename.endswith('.docx') or content_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-        return extract_text_from_docx(stream_bytes), False
+        txt = extract_text_from_docx(stream_bytes)
+        return txt, False, [{"page": 1, "start_char": 0, "end_char": len(txt)}]
     elif lower_filename.endswith('.doc'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Legacy binary .doc format is not supported directly. Please convert to .docx or .pdf."
         )
     elif lower_filename.endswith(('.txt', '.md')) or (content_type and content_type.startswith('text/')):
-        return extract_text_from_txt(stream_bytes), False
+        txt = extract_text_from_txt(stream_bytes)
+        return txt, False, [{"page": 1, "start_char": 0, "end_char": len(txt)}]
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
