@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import DocumentViewer from "./DocumentViewer.svelte";
   import {
     downloadPdfAuditReport,
@@ -6,20 +7,19 @@
     type MappedViolation,
   } from "$lib/services/api";
   import {
-    exportReportAsJson,
-    exportReportAsCsv,
     exportReportAsMarkdown,
   } from "$lib/services/exportService";
   import type { Framework } from "$lib/data/sampleDocs";
   import { soundState } from "$lib/services/sound.svelte";
   import {
     Download,
-    FileCode,
-    Lock,
     FileText,
     MapPin,
     Search,
     Sparkles,
+    AlertCircle,
+    ChevronLeft,
+    ChevronRight,
   } from "@lucide/svelte";
 
   interface Props {
@@ -38,6 +38,75 @@
   let { file, report, frameworks, onReset }: Props = $props();
 
   let activeViolationIndex = $state<number | null>(null);
+
+  // Split Screen Resizing State & Persistence
+  const DEFAULT_SPLIT_PERCENT = 58;
+  const MIN_SPLIT_PERCENT = 25;
+  const MAX_SPLIT_PERCENT = 75;
+  const STORAGE_SPLIT_KEY = "kagua_split_ratio";
+
+  let splitPercent = $state(DEFAULT_SPLIT_PERCENT);
+  let isDraggingSplitter = $state(false);
+  let splitContainer = $state<HTMLDivElement | undefined>(undefined);
+
+  onMount(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem(STORAGE_SPLIT_KEY);
+      if (saved) {
+        const parsed = parseFloat(saved);
+        if (!isNaN(parsed) && parsed >= MIN_SPLIT_PERCENT && parsed <= MAX_SPLIT_PERCENT) {
+          splitPercent = parsed;
+        }
+      }
+    }
+  });
+
+  function startDragging(e: MouseEvent) {
+    e.preventDefault();
+    isDraggingSplitter = true;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+
+    window.addEventListener("mousemove", handleDragging);
+    window.addEventListener("mouseup", stopDragging);
+  }
+
+  function handleDragging(e: MouseEvent) {
+    if (!isDraggingSplitter || !splitContainer) return;
+    const rect = splitContainer.getBoundingClientRect();
+    const rawPercent = ((e.clientX - rect.left) / rect.width) * 100;
+    splitPercent = Math.min(Math.max(MIN_SPLIT_PERCENT, rawPercent), MAX_SPLIT_PERCENT);
+  }
+
+  function stopDragging() {
+    if (!isDraggingSplitter) return;
+    isDraggingSplitter = false;
+    document.body.style.userSelect = "";
+    document.body.style.cursor = "";
+
+    window.removeEventListener("mousemove", handleDragging);
+    window.removeEventListener("mouseup", stopDragging);
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_SPLIT_KEY, splitPercent.toFixed(1));
+    }
+  }
+
+  function resetSplitRatio() {
+    soundState.playClick();
+    splitPercent = DEFAULT_SPLIT_PERCENT;
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_SPLIT_KEY, String(DEFAULT_SPLIT_PERCENT));
+    }
+  }
+
+  function setPresetSplit(percent: number) {
+    soundState.playClick();
+    splitPercent = Math.min(Math.max(MIN_SPLIT_PERCENT, percent), MAX_SPLIT_PERCENT);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(STORAGE_SPLIT_KEY, String(splitPercent));
+    }
+  }
 
   // Raw text extracted or passed from file sample
   let rawText = $derived(report?.raw_text || file.content || "");
@@ -77,18 +146,6 @@
     } finally {
       isDownloadingPdf = false;
     }
-  }
-
-  function handleDownloadJson() {
-    soundState.playClick();
-    if (!report) return;
-    exportReportAsJson(report);
-  }
-
-  function handleDownloadCsv() {
-    soundState.playClick();
-    if (!report) return;
-    exportReportAsCsv(report);
   }
 
   function handleDownloadMarkdown() {
@@ -160,9 +217,9 @@
   </div>
 
   <!-- Main Split Screen Work Area -->
-  <div class="split-screen-grid">
+  <div class="split-screen-container" bind:this={splitContainer}>
     <!-- Left Panel: Split Document Viewer with Offset Highlights -->
-    <div class="viewer-column">
+    <div class="viewer-column" style="flex: 0 0 {splitPercent}%; max-width: {splitPercent}%;">
       <DocumentViewer
         filename={file.name}
         fileBlob={file.blob}
@@ -173,8 +230,70 @@
       />
     </div>
 
+    <!-- Horizontal Resizer Divider Bar -->
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div
+      class="resize-divider-bar"
+      class:is-dragging={isDraggingSplitter}
+      onmousedown={startDragging}
+      ondblclick={resetSplitRatio}
+      onkeydown={(e) => {
+        if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          setPresetSplit(splitPercent - 2);
+        } else if (e.key === "ArrowRight") {
+          e.preventDefault();
+          setPresetSplit(splitPercent + 2);
+        } else if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          resetSplitRatio();
+        }
+      }}
+      role="separator"
+      aria-orientation="vertical"
+      aria-valuenow={Math.round(splitPercent)}
+      aria-valuemin={25}
+      aria-valuemax={75}
+      title="Drag to resize panels horizontally. Double-click to reset (58/42)."
+      tabindex="0"
+    >
+      <div class="divider-grip">
+        <button
+          type="button"
+          class="quick-snap-btn"
+          onclick={(e) => {
+            e.stopPropagation();
+            setPresetSplit(30);
+          }}
+          title="Focus Findings (Collapse PDF)"
+        >
+          <ChevronLeft size={11} />
+        </button>
+
+        <div class="grip-dots">
+          <span></span><span></span><span></span>
+        </div>
+
+        <button
+          type="button"
+          class="quick-snap-btn"
+          onclick={(e) => {
+            e.stopPropagation();
+            setPresetSplit(72);
+          }}
+          title="Focus PDF (Expand Document)"
+        >
+          <ChevronRight size={11} />
+        </button>
+      </div>
+    </div>
+
     <!-- Right Panel: Compliance Summary & Violations Cards -->
-    <div class="summary-column">
+    <div
+      class="summary-column"
+      style="flex: 0 0 calc(100% - {splitPercent}% - 14px); max-width: calc(100% - {splitPercent}% - 14px);"
+    >
       <!-- Standalone Severity Count Chips Outside Card -->
       <div class="summary-counts-column">
         <span class="count-chip critical">
@@ -189,29 +308,6 @@
         </span>
       </div>
 
-      <!-- Privacy-Preserving RAG Status Card -->
-      <!-- <div class="rag-privacy-card">
-        <div class="rag-title-row">
-          <span class="rag-icon"><Lock size={14} /></span>
-          <h4 class="rag-title">PRIVACY-PRESERVING RAG ENGINE</h4>
-          <span class="rag-live-badge">ACTIVE</span>
-        </div>
-        <div class="rag-stats-grid">
-          <div class="rag-stat-item">
-            <span class="rag-stat-num">{report?.pii_redacted_count ?? 6}</span>
-            <span class="rag-stat-lbl">PII REDACTIONS (RAM ONLY)</span>
-          </div>
-          <div class="rag-stat-item">
-            <span class="rag-stat-num">0</span>
-            <span class="rag-stat-lbl">DISK PERSISTENCE (BYTES)</span>
-          </div>
-          <div class="rag-stat-item">
-            <span class="rag-stat-num">100%</span>
-            <span class="rag-stat-lbl">IN-MEMORY VECTOR RETRIEVAL</span>
-          </div>
-        </div>
-      </div> -->
-
       <!-- Action Export Panel -->
       <div class="export-card">
         <h4 class="export-title">AUDIT REPORT EXPORT</h4>
@@ -221,31 +317,19 @@
             class="btn-pdf-export"
             disabled={isDownloadingPdf}
             onclick={handleDownloadPdf}
+            title="Download official PDF compliance audit report"
           >
             {#if isDownloadingPdf}
               GENERATING PDF...
             {:else}
-              <Download size={14} /> DOWNLOAD PDF REPORT
+              <Download size={14} /> DOWNLOAD PDF
             {/if}
           </button>
           <button
             type="button"
-            class="btn-json-export"
-            onclick={handleDownloadJson}
-          >
-            <FileCode size={14} /> EXPORT JSON
-          </button>
-          <button
-            type="button"
-            class="btn-json-export"
-            onclick={handleDownloadCsv}
-          >
-            <FileText size={14} /> EXPORT CSV
-          </button>
-          <button
-            type="button"
-            class="btn-json-export"
+            class="btn-md-export"
             onclick={handleDownloadMarkdown}
+            title="Export executive Markdown briefing for counsel"
           >
             <FileText size={14} /> EXPORT BRIEF (MD)
           </button>
@@ -304,28 +388,41 @@
                 </div>
               {/if}
 
-              <div class="card-action-row">
-                <button
-                  type="button"
-                  class="jump-doc-btn"
-                  class:active={activeViolationIndex === idx}
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    selectViolation(idx);
-                  }}
-                >
-                  <MapPin size={13} />
-                  {activeViolationIndex === idx
-                    ? "Highlighting in Document..."
-                    : "Jump to Issue in Document"}
-                </button>
+              {#if violation.is_omission}
+                <div class="omission-notice-badge">
+                  <AlertCircle size={13} />
+                  <span>Statutory Omission (Absent from Document)</span>
+                </div>
+              {:else}
+                <div class="card-action-row">
+                  <button
+                    type="button"
+                    class="jump-doc-btn"
+                    class:active={activeViolationIndex === idx}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      selectViolation(idx);
+                    }}
+                  >
+                    <MapPin size={13} />
+                    {activeViolationIndex === idx
+                      ? "Highlighting in Document..."
+                      : violation.page_number
+                        ? `Jump to Page ${violation.page_number}`
+                        : "Jump to Issue in Document"}
+                  </button>
 
-                {#if typeof violation.start_char === "number" && typeof violation.end_char === "number"}
-                  <div class="offset-badge">
-                    Chars {violation.start_char} &ndash; {violation.end_char}
-                  </div>
-                {/if}
-              </div>
+                  {#if violation.page_number}
+                    <div class="page-badge">
+                      PAGE {violation.page_number}
+                    </div>
+                  {:else if typeof violation.start_char === "number" && typeof violation.end_char === "number"}
+                    <div class="offset-badge">
+                      Chars {violation.start_char} &ndash; {violation.end_char}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
             </div>
           {/each}
         </div>
@@ -523,7 +620,7 @@
     align-items: center;
     justify-content: space-between;
     background: rgba(13, 23, 36, 0.9);
-    border: 1px solid rgba(0, 240, 255, 0.2);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     border-radius: 6px;
     padding: 0.85rem 1.25rem;
     flex-wrap: wrap;
@@ -538,7 +635,7 @@
 
   .file-icon-badge {
     padding: 6px 10px;
-    background: rgba(0, 240, 255, 0.15);
+    background: rgba(107, 138, 153, 0.15);
     border: 1px solid var(--cyan-primary);
     border-radius: 4px;
     color: var(--cyan-primary);
@@ -584,21 +681,16 @@
     transform: translateY(-2px) scale(1.02);
   }
 
-  /* Split Screen Layout */
-  .split-screen-grid {
-    display: grid;
-    grid-template-columns: 1fr 420px;
-    gap: 1.25rem;
+  /* Split Screen Resizable Container */
+  .split-screen-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
     height: calc(100vh - 220px);
     min-height: 650px;
-  }
-
-  @media (max-width: 1024px) {
-    .split-screen-grid {
-      grid-template-columns: 1fr;
-      height: auto;
-      max-height: none;
-    }
+    gap: 0;
+    position: relative;
   }
 
   .viewer-column {
@@ -606,6 +698,85 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+    min-width: 0;
+  }
+
+  /* Horizontal Draggable Divider Bar */
+  .resize-divider-bar {
+    width: 14px;
+    cursor: col-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    position: relative;
+    user-select: none;
+    z-index: 10;
+    transition: background 0.2s ease;
+  }
+
+  .resize-divider-bar:hover,
+  .resize-divider-bar.is-dragging {
+    background: rgba(107, 138, 153, 0.1);
+  }
+
+  .divider-grip {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 1px;
+    background: #0d1724;
+    border: 1px solid #132e35;
+    border-radius: 12px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+    transition: all 0.2s ease;
+  }
+
+  .resize-divider-bar:hover .divider-grip,
+  .resize-divider-bar.is-dragging .divider-grip {
+    border-color: var(--cyan-primary);
+    box-shadow: 0 0 8px rgba(107, 138, 153, 0.25);
+  }
+
+  .grip-dots {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 2px 0;
+  }
+
+  .grip-dots span {
+    width: 4px;
+    height: 4px;
+    background: #4a6775;
+    border-radius: 50%;
+    transition: background 0.2s ease;
+  }
+
+  .resize-divider-bar:hover .grip-dots span,
+  .resize-divider-bar.is-dragging .grip-dots span {
+    background: var(--cyan-primary);
+  }
+
+  .quick-snap-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: #69818d;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+  }
+
+  .quick-snap-btn:hover {
+    color: var(--cyan-primary);
+    background: rgba(107, 138, 153, 0.18);
   }
 
   .summary-column {
@@ -614,7 +785,29 @@
     gap: 1.25rem;
     height: 100%;
     overflow-y: auto;
+    padding-left: 6px;
     padding-right: 4px;
+    min-width: 0;
+  }
+
+  @media (max-width: 1024px) {
+    .split-screen-container {
+      flex-direction: column;
+      height: auto;
+      min-height: unset;
+      gap: 1.25rem;
+    }
+
+    .viewer-column,
+    .summary-column {
+      flex: 1 1 100% !important;
+      max-width: 100% !important;
+      padding-left: 0;
+    }
+
+    .resize-divider-bar {
+      display: none;
+    }
   }
 
   /* Standalone Severity Count Chips Outside Card (Plain Text) */
@@ -646,86 +839,12 @@
     color: #ffd700;
   }
 
-  /* Privacy RAG Card */
-  /* .rag-privacy-card {
-    background: rgba(4, 12, 22, 0.85);
-    border: 1px solid rgba(0, 240, 255, 0.25);
-    border-radius: 6px;
-    padding: 0.85rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.6rem;
-    box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.04);
-  } */
-
-  .rag-title-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .rag-icon {
-    font-size: 0.9rem;
-  }
-
-  .rag-title {
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 1.5px;
-    color: #ffffff;
-    flex: 1;
-  }
-
-  .rag-live-badge {
-    font-family: var(--font-mono);
-    font-size: 0.58rem;
-    font-weight: 800;
-    color: #00ff88;
-    background: rgba(0, 255, 136, 0.12);
-    border: 1px solid rgba(0, 255, 136, 0.4);
-    padding: 2px 6px;
-    border-radius: 3px;
-  }
-
-  .rag-stats-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-
-  .rag-stat-item {
-    background: rgba(0, 240, 255, 0.04);
-    border: 1px solid rgba(0, 240, 255, 0.12);
-    border-radius: 4px;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    text-align: center;
-  }
-
-  .rag-stat-num {
-    font-family: var(--font-mono);
-    font-size: 0.95rem;
-    font-weight: 800;
-    color: var(--cyan-primary);
-  }
-
-  .rag-stat-lbl {
-    font-family: var(--font-mono);
-    font-size: 0.52rem;
-    color: var(--text-muted);
-    line-height: 1.1;
-    margin-top: 2px;
-  }
-
   /* Export Card */
   .export-card {
     background: #0d1724;
-    border: 1px solid rgba(0, 240, 255, 0.15);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     border-radius: 6px;
-    padding: 1rem 1.25rem;
+    padding: 0.85rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -741,11 +860,13 @@
 
   .export-buttons {
     display: flex;
-    gap: 10px;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
   }
 
   .btn-pdf-export {
-    flex: 1;
+    flex: 1 1 140px;
     font-family: var(--font-title);
     font-size: 0.8rem;
     font-weight: 700;
@@ -757,6 +878,10 @@
     padding: 10px 14px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
 
   .btn-pdf-export:hover:not(:disabled) {
@@ -770,21 +895,26 @@
     cursor: not-allowed;
   }
 
-  .btn-json-export {
+  .btn-md-export {
+    flex: 1 1 140px;
     font-family: var(--font-title);
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 1.5px;
     color: #e2f1f8;
-    background: #132e35;
-    border: 1px solid #1e434c;
+    background: #0f1d24;
+    border: 1px solid #1e353d;
     padding: 10px 14px;
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
   }
 
-  .btn-json-export:hover {
+  .btn-md-export:hover {
     background: #1c3f48;
     border-color: #2a5863;
     transform: translateY(-2px) scale(1.02);
@@ -793,7 +923,7 @@
   /* Findings List */
   .findings-card {
     background: #0d1724;
-    border: 1px solid rgba(0, 240, 255, 0.15);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     border-radius: 6px;
     padding: 1.25rem;
     display: flex;
@@ -848,14 +978,40 @@
   }
 
   .finding-item:hover {
-    border-color: rgba(0, 240, 255, 0.4);
-    background: rgba(0, 240, 255, 0.04);
+    border-color: rgba(107, 138, 153, 0.4);
+    background: rgba(107, 138, 153, 0.04);
   }
 
   .finding-item.selected {
     border-color: var(--cyan-primary);
-    box-shadow: 0 0 14px rgba(0, 240, 255, 0.25);
-    background: rgba(0, 240, 255, 0.08);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    background: rgba(107, 138, 153, 0.08);
+  }
+
+  .page-badge {
+    padding: 3px 8px;
+    background: rgba(107, 138, 153, 0.18);
+    border: 1px solid rgba(107, 138, 153, 0.35);
+    border-radius: 3px;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #e2f1f8;
+  }
+
+  .omission-notice-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: rgba(255, 170, 0, 0.12);
+    border: 1px dashed rgba(255, 170, 0, 0.5);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #ffaa00;
+    margin-top: 6px;
   }
 
   .finding-top {
@@ -916,7 +1072,7 @@
     font-family: var(--font-mono);
     font-size: 0.7rem;
     color: #a0b2c6;
-    background: rgba(0, 240, 255, 0.04);
+    background: rgba(107, 138, 153, 0.06);
     border-left: 2px solid var(--cyan-primary);
     padding: 4px 8px;
     border-radius: 2px;
@@ -931,7 +1087,7 @@
     font-family: var(--font-mono);
     font-size: 0.62rem;
     color: var(--cyan-primary);
-    background: rgba(0, 240, 255, 0.06);
+    background: rgba(107, 138, 153, 0.08);
     padding: 2px 6px;
     border-radius: 2px;
     align-self: flex-start;
@@ -940,9 +1096,9 @@
   .statutory-citation-badge {
     font-family: var(--font-mono);
     font-size: 0.68rem;
-    color: #5ce1e6;
-    background: rgba(0, 240, 255, 0.08);
-    border: 1px solid rgba(0, 240, 255, 0.25);
+    color: var(--cyan-muted);
+    background: rgba(107, 138, 153, 0.08);
+    border: 1px solid rgba(107, 138, 153, 0.25);
     padding: 4px 8px;
     border-radius: 3px;
   }
@@ -952,7 +1108,7 @@
     font-size: 0.72rem;
     color: #9cb3c9;
     background: rgba(4, 12, 22, 0.9);
-    border-left: 2px solid #5ce1e6;
+    border-left: 2px solid var(--cyan-primary);
     padding: 5px 8px;
     border-radius: 2px;
     font-style: italic;
@@ -962,14 +1118,14 @@
     font-family: var(--font-mono);
     font-size: 0.6rem;
     font-weight: 700;
-    color: #5ce1e6;
+    color: var(--cyan-primary);
     font-style: normal;
   }
 
   /* Fact Provenance Card */
   .provenance-card {
     background: #0d1724;
-    border: 1px solid rgba(0, 240, 255, 0.2);
+    border: 1px solid rgba(107, 138, 153, 0.2);
     border-radius: 6px;
     padding: 1rem 1.25rem;
     display: flex;
@@ -1005,7 +1161,7 @@
 
   .prov-item {
     background: rgba(6, 11, 18, 0.85);
-    border: 1px solid rgba(0, 240, 255, 0.1);
+    border: 1px solid rgba(107, 138, 153, 0.15);
     border-radius: 4px;
     padding: 0.6rem;
     display: flex;
@@ -1130,6 +1286,26 @@
     border-color: #69818d;
   }
 
+  :global([data-theme="light"]) .divider-grip {
+    background: #afb3b7;
+    border-color: #99a3ab;
+  }
+
+  :global([data-theme="light"]) .resize-divider-bar:hover .divider-grip,
+  :global([data-theme="light"]) .resize-divider-bar.is-dragging .divider-grip {
+    border-color: #69818d;
+    box-shadow: 0 0 8px rgba(105, 129, 141, 0.4);
+  }
+
+  :global([data-theme="light"]) .quick-snap-btn {
+    color: #2d3a45;
+  }
+
+  :global([data-theme="light"]) .quick-snap-btn:hover {
+    color: #ffffff;
+    background: #69818d;
+  }
+
   :global([data-theme="light"]) .count-chip.critical {
     color: #cc2244;
   }
@@ -1148,14 +1324,14 @@
   }
 
   :global([data-theme="light"]) .btn-pdf-export,
-  :global([data-theme="light"]) .btn-json-export {
+  :global([data-theme="light"]) .btn-md-export {
     background: #69818d;
     border-color: #8a9aa8;
     color: #ffffff;
   }
 
   :global([data-theme="light"]) .btn-pdf-export:hover:not(:disabled),
-  :global([data-theme="light"]) .btn-json-export:hover {
+  :global([data-theme="light"]) .btn-md-export:hover {
     background: #5a7380;
     border-color: #69818d;
   }
@@ -1319,14 +1495,14 @@
   /* 2px right+bottom shadow on all action buttons */
   .btn-rescan,
   .btn-pdf-export,
-  .btn-json-export,
+  .btn-md-export,
   .jump-doc-btn {
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
   }
 
   :global([data-theme="light"]) .btn-rescan,
   :global([data-theme="light"]) .btn-pdf-export,
-  :global([data-theme="light"]) .btn-json-export,
+  :global([data-theme="light"]) .btn-md-export,
   :global([data-theme="light"]) .jump-doc-btn {
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
   }
@@ -1378,7 +1554,7 @@
     }
 
     .btn-pdf-export,
-    .btn-json-export {
+    .btn-md-export {
       width: 100%;
       justify-content: center;
     }

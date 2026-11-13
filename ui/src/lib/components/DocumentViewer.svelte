@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import type { MappedViolation } from '$lib/services/api';
   import { soundState } from '$lib/services/sound.svelte';
-  import { FileText, Maximize2, Minimize2, AlertTriangle } from '@lucide/svelte';
+  import { FileText, Maximize2, Minimize2, AlertTriangle, Minus, Plus } from '@lucide/svelte';
 
   let pdfjsLib = $state<any>(null);
 
@@ -134,10 +134,38 @@
     }
   }
 
+  export function jumpToPage(pageNum: number) {
+    if (!pdfCanvasContainer || !viewerContainer) return;
+    const clampedPage = Math.max(1, Math.min(numPages, pageNum));
+    currentPage = clampedPage;
+    highlightedPage = clampedPage;
+    const targetPageEl = pdfCanvasContainer.querySelector(
+      `[data-page-num="${clampedPage}"]`
+    ) as HTMLElement | null;
+    if (targetPageEl) {
+      const containerTop = pdfCanvasContainer.offsetTop;
+      const pageRelativeTop = targetPageEl.offsetTop;
+      const scrollTarget = containerTop + pageRelativeTop - 20;
+      viewerContainer.scrollTo({
+        top: scrollTarget,
+        behavior: 'smooth'
+      });
+      targetPageEl.classList.add('pulse-page-highlight');
+      setTimeout(() => {
+        targetPageEl.classList.remove('pulse-page-highlight');
+      }, 2500);
+    }
+  }
+
   // Handle active violation scroll and temporary highlight pulse
   $effect(() => {
     if (activeViolationIndex !== null && violations[activeViolationIndex]) {
       const v = violations[activeViolationIndex];
+
+      // If violation is an omission, do not scroll or pulse document pages
+      if (v.is_omission) {
+        return;
+      }
 
       // Trigger temporary 2.5s pulse highlight
       pulseIndex = activeViolationIndex;
@@ -148,65 +176,62 @@
       }, 2500);
 
       if (pdfDoc && pdfCanvasContainer) {
-        // --- Improved Page Detection ---
-        // Build a ranked list of candidate search terms from the violation
-        const searchTerms: string[] = [];
-
-        // 1. Try the snippet text first (most specific)
-        if (v.snippet) {
-          const snippetWords = v.snippet.toLowerCase().replace(/[^\w\s]/g, ' ').trim();
-          if (snippetWords.length > 10) searchTerms.push(snippetWords.slice(0, 60));
-          // Also try first 30 chars
-          if (snippetWords.length > 6) searchTerms.push(snippetWords.slice(0, 30));
-        }
-
-        // 2. Try individual meaningful keywords from snippet
-        if (v.snippet) {
-          const words = v.snippet.toLowerCase()
-            .replace(/[^\w\s]/g, ' ')
-            .split(/\s+/)
-            .filter(w => w.length > 5)
-            .slice(0, 5);
-          searchTerms.push(...words);
-        }
-
-        // 3. Try title keywords
-        if (v.title) {
-          const titleWords = v.title.toLowerCase()
-            .replace(/[^\w\s]/g, ' ')
-            .split(/\s+/)
-            .filter(w => w.length > 4);
-          searchTerms.push(...titleWords);
-        }
-
-        // 4. Try description keywords
-        if (v.description) {
-          const descWords = v.description.toLowerCase()
-            .replace(/[^\w\s]/g, ' ')
-            .split(/\s+/)
-            .filter(w => w.length > 6)
-            .slice(0, 5);
-          searchTerms.push(...descWords);
-        }
-
-        // Score each page — the page with the most term matches wins
         let bestPage = 1;
-        let bestScore = -1;
 
-        for (let p = 1; p <= numPages; p++) {
-          const pageText = pageTexts[p];
-          if (!pageText) continue;
+        if (typeof v.page_number === 'number' && v.page_number >= 1) {
+          bestPage = Math.min(Math.max(1, v.page_number), numPages);
+        } else {
+          // --- Fallback Page Detection if page_number is not set ---
+          const searchTerms: string[] = [];
 
-          let score = 0;
-          for (const term of searchTerms) {
-            if (pageText.includes(term)) {
-              // More weight for longer/more specific terms
-              score += term.length;
-            }
+          if (v.snippet) {
+            const snippetWords = v.snippet.toLowerCase().replace(/[^\w\s]/g, ' ').trim();
+            if (snippetWords.length > 10) searchTerms.push(snippetWords.slice(0, 60));
+            if (snippetWords.length > 6) searchTerms.push(snippetWords.slice(0, 30));
           }
-          if (score > bestScore) {
-            bestScore = score;
-            bestPage = p;
+
+          if (v.snippet) {
+            const words = v.snippet.toLowerCase()
+              .replace(/[^\w\s]/g, ' ')
+              .split(/\s+/)
+              .filter(w => w.length > 5)
+              .slice(0, 5);
+            searchTerms.push(...words);
+          }
+
+          if (v.title) {
+            const titleWords = v.title.toLowerCase()
+              .replace(/[^\w\s]/g, ' ')
+              .split(/\s+/)
+              .filter(w => w.length > 4);
+            searchTerms.push(...titleWords);
+          }
+
+          if (v.description) {
+            const descWords = v.description.toLowerCase()
+              .replace(/[^\w\s]/g, ' ')
+              .split(/\s+/)
+              .filter(w => w.length > 6)
+              .slice(0, 5);
+            searchTerms.push(...descWords);
+          }
+
+          let bestScore = -1;
+
+          for (let p = 1; p <= numPages; p++) {
+            const pageText = pageTexts[p];
+            if (!pageText) continue;
+
+            let score = 0;
+            for (const term of searchTerms) {
+              if (pageText.includes(term)) {
+                score += term.length;
+              }
+            }
+            if (score > bestScore) {
+              bestScore = score;
+              bestPage = p;
+            }
           }
         }
 
@@ -214,13 +239,11 @@
         currentPage = bestPage;
 
         // --- Scroll to detected page inside the viewer-content div ---
-        // Use manual offsetTop-based scroll (not scrollIntoView which scrolls window)
         const targetPageEl = pdfCanvasContainer.querySelector(
           `[data-page-num="${bestPage}"]`
         ) as HTMLElement | null;
 
         if (targetPageEl && viewerContainer) {
-          // offsetTop relative to pdfCanvasContainer, then add container's offsetTop
           const containerTop = pdfCanvasContainer.offsetTop;
           const pageRelativeTop = targetPageEl.offsetTop;
           const scrollTarget = containerTop + pageRelativeTop - 20; // 20px breathing room
@@ -267,11 +290,24 @@
     </div>
 
     <div class="header-actions">
-      <!-- PDF Zoom Controls -->
-      <div class="pdf-controls">
-        <button type="button" class="ctrl-btn" onclick={() => changeZoom(-0.15)} title="Zoom Out">&minus;</button>
-        <span class="zoom-val">{Math.round(zoomLevel * 100)}%</span>
-        <button type="button" class="ctrl-btn" onclick={() => changeZoom(0.15)} title="Zoom In">&plus;</button>
+      <!-- PDF Attached Segmented Zoom Controls -->
+      <div class="pdf-zoom-group">
+        <button
+          type="button"
+          class="zoom-btn zoom-out"
+          onclick={() => changeZoom(-0.15)}
+          title={`Zoom Out (${Math.round(zoomLevel * 100)}%)`}
+        >
+          <Minus size={13} />
+        </button>
+        <button
+          type="button"
+          class="zoom-btn zoom-in"
+          onclick={() => changeZoom(0.15)}
+          title={`Zoom In (${Math.round(zoomLevel * 100)}%)`}
+        >
+          <Plus size={13} />
+        </button>
       </div>
 
       <!-- Expand / Fullscreen Button at Top-Right Edge -->
@@ -319,7 +355,7 @@
     height: 100%;
     min-height: 350px;
     background: #080f17;
-    border: 1px solid rgba(0, 240, 255, 0.18);
+    border: 1px solid rgba(107, 138, 153, 0.22);
     border-radius: 6px;
     overflow: hidden;
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
@@ -335,7 +371,7 @@
     z-index: 999999;
     border-radius: 0;
     border: none;
-    box-shadow: 0 0 60px rgba(0, 240, 255, 0.35);
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.85);
   }
 
   .viewer-header {
@@ -344,7 +380,7 @@
     justify-content: space-between;
     padding: 0.75rem 1.25rem;
     background: rgba(13, 23, 36, 0.95);
-    border-bottom: 1px solid rgba(0, 240, 255, 0.15);
+    border-bottom: 1px solid rgba(107, 138, 153, 0.2);
     flex-wrap: wrap;
     gap: 0.75rem;
   }
@@ -358,40 +394,38 @@
   .expand-btn {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font-family: var(--font-mono);
-    font-size: 0.68rem;
+    gap: 6px;
+    font-family: var(--font-title);
+    font-size: 0.72rem;
     font-weight: 700;
+    letter-spacing: 1px;
     background: rgba(13, 23, 36, 0.95);
     border: 1px solid #132E35;
     color: #e2f1f8;
-    padding: 3px 8px;
-    border-radius: 6px;
+    padding: 0 12px;
+    height: 28px;
+    box-sizing: border-box;
+    border-radius: 4px;
     cursor: pointer;
     transition: all 0.25s ease;
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
   }
 
   .expand-btn:hover {
-    background: #132E35;
-    border-color: #1e434c;
+    background: #1c3f48;
+    border-color: #2a5863;
     color: #ffffff;
   }
 
   .expand-btn.expanded {
-    background: #132E35;
-    border-color: #1e434c;
-    color: #e2f1f8;
-  }
-
-  .expand-btn.expanded:hover {
     background: #1c3f48;
     border-color: #2a5863;
     color: #ffffff;
   }
 
   .btn-icon {
-    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
   }
 
   .title-box {
@@ -422,39 +456,50 @@
     border-radius: 3px;
   }
 
-  .pdf-controls {
-    display: flex;
+  /* Attached Segmented Zoom Control Group */
+  .pdf-zoom-group {
+    display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 2px 8px;
+    height: 28px;
+    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
     border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  .ctrl-btn {
+  .zoom-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
     background: rgba(13, 23, 36, 0.95);
     border: 1px solid #132E35;
     color: #e2f1f8;
-    font-size: 1rem;
-    font-weight: bold;
     cursor: pointer;
-    padding: 3px 8px;
-    border-radius: 6px;
-    transition: all 0.25s ease;
-    box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.25);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    box-sizing: border-box;
   }
 
-  .ctrl-btn:hover {
-    background: #132E35;
-    border-color: #1e434c;
+  /* Left button: outer-left rounded corners & inner right border */
+  .zoom-btn.zoom-out {
+    border-radius: 4px 0 0 4px;
+    border-right: 1px solid rgba(19, 46, 53, 0.6);
+  }
+
+  /* Right button: outer-right rounded corners */
+  .zoom-btn.zoom-in {
+    border-radius: 0 4px 4px 0;
+    border-left: none;
+  }
+
+  .zoom-btn:hover {
+    background: #1c3f48;
+    border-color: #2a5863;
     color: #ffffff;
   }
 
-  .zoom-val {
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    color: #d1dbe5;
+  .zoom-btn:active {
+    transform: translateY(1px);
   }
 
 
@@ -468,7 +513,7 @@
     flex-direction: column;
     align-items: center;
     scrollbar-width: thin;
-    scrollbar-color: rgba(0, 240, 255, 0.4) rgba(6, 11, 18, 0.9);
+    scrollbar-color: rgba(107, 138, 153, 0.4) rgba(6, 11, 18, 0.9);
   }
 
   .viewer-content::-webkit-scrollbar {
@@ -480,7 +525,7 @@
   }
 
   .viewer-content::-webkit-scrollbar-thumb {
-    background: rgba(0, 240, 255, 0.4);
+    background: rgba(107, 138, 153, 0.4);
     border-radius: 3px;
   }
 
@@ -502,7 +547,7 @@
   .spinner {
     width: 28px;
     height: 28px;
-    border: 3px solid rgba(0, 240, 255, 0.2);
+    border: 3px solid rgba(107, 138, 153, 0.2);
     border-top-color: var(--cyan-primary);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -559,8 +604,8 @@
   }
 
   :global(.pdf-page-wrapper.pulse-page-highlight) {
-    outline: 4px solid var(--cyan-primary) !important;
-    box-shadow: 0 0 35px var(--cyan-primary), 0 0 60px rgba(0, 240, 255, 0.7) !important;
+    outline: 3px solid var(--cyan-primary) !important;
+    box-shadow: 0 0 25px rgba(107, 138, 153, 0.4) !important;
     animation: pdfPageGlow 0.8s ease-in-out infinite alternate !important;
   }
 
@@ -597,21 +642,24 @@
     color: #5a6a78;
   }
 
-  :global([data-theme="light"]) .ctrl-btn {
-    background: rgba(194, 198, 202, 0.95);
-    border-color: #8a9aa8;
-    color: #2d3a45;
+  :global([data-theme="light"]) .pdf-zoom-group {
     box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
   }
 
-  :global([data-theme="light"]) .ctrl-btn:hover {
+  :global([data-theme="light"]) .zoom-btn {
+    background: rgba(194, 198, 202, 0.95);
+    border-color: #8a9aa8;
+    color: #2d3a45;
+  }
+
+  :global([data-theme="light"]) .zoom-btn.zoom-out {
+    border-right-color: rgba(138, 154, 168, 0.6);
+  }
+
+  :global([data-theme="light"]) .zoom-btn:hover {
     background: #69818d;
     border-color: #69818d;
     color: #ffffff;
-  }
-
-  :global([data-theme="light"]) .zoom-val {
-    color: #5a6a78;
   }
 
   :global([data-theme="light"]) .expand-btn {
@@ -635,11 +683,6 @@
 
   :global([data-theme="light"]) .viewer-content {
     background: #b8bcc0;
-  }
-
-  :global([data-theme="light"]) .pdf-controls {
-    background: rgba(194, 198, 202, 0.5);
-    border-color: #8a9aa8;
   }
 
   /* ─── Mobile Responsiveness ─── */
@@ -671,22 +714,18 @@
       gap: 6px;
     }
 
-    .pdf-controls {
-      padding: 2px 4px;
-      gap: 4px;
+    .pdf-zoom-group {
+      height: 24px;
     }
 
-    .ctrl-btn {
-      padding: 2px 6px;
-      font-size: 0.85rem;
-    }
-
-    .zoom-val {
-      font-size: 0.65rem;
+    .zoom-btn {
+      width: 24px;
+      height: 24px;
     }
 
     .expand-btn {
-      padding: 2px 6px;
+      padding: 0 8px;
+      height: 24px;
       font-size: 0.62rem;
     }
 
